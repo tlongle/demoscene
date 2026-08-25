@@ -9,15 +9,13 @@ A web app and scraper designed to catalogue, inspect, and track **PS1 and PS2 PA
 - **Docker & Server Ready**: Pre-configured `Dockerfile` and `docker-compose.yml` with persistent `/data` volume for SQLite and downloaded images. Seamlessly runs behind **Nginx** reverse proxy and **Cloudflare Tunnels**.
 - **Offline Scans & Image Cache**: Downloads and stores all disc face scans, front slipcases, back inlays, and variant covers locally inside the Docker volume.
 - **Real Game Box Art Integration**: Resolves and displays high-res PAL game box covers for playable demo games and trailers (supports official **IGDB / Twitch API** + open cover archives with retro fallback placeholders for non-game media/videos).
-- **Progressive Web App (PWA)**: Installable on iOS (Safari: "Add to Home Screen") and Android (Chrome: "Install App") with offline Service Worker support and mobile bottom dock.
-- *2000s Retro PlayStation Aesthetic**: Authentic early-2000s OPM fan portal design with dark carbon/cobalt blue palette, beveled badges, CRT scanlines, and jewel/keep case framing.
 - **Instant Search & Deep Filtering**: Search by demo title (`OPS2M Demo 46`), SCED code (`SCED-52161`), or game title (`Silent Hill`, `Tekken`, `Crash Bandicoot`).
 - **Collector Inventory Ledger**:
-  - 1-tap toggling: **🟢 In Collection**, **🟡 Wishlist**, **⚪ Not Owned**.
+  - 1-tap toggling: **In Collection**, **Wishlist**, **Not Owned**.
   - Physical condition tracking (*Mint*, *Good*, *Acceptable*, *Poor*, *Disc Only*).
   - Checklist (*Original Sleeve*, *Case*, *Tested & Working*).
   - Custom collector logs (boot sale notes, spine numbers, variant notes).
-- 💾 **Backup & Restore**: Instant JSON export and restore of your collection ledger.
+- **Backup & Restore**: Instant JSON export and restore of your collection ledger.
 
 ---
 
@@ -66,7 +64,7 @@ Open **[http://localhost:8000](http://localhost:8000)** in your browser.
 ## Offline Asset Caching & Scans Download
 
 To download all disc scans, slipcases, and box art locally into `./data/assets`:
-1. In the web app header, click **"💾 OFFLINE ASSETS"**.
+1. In the web app header, click **"OFFLINE ASSETS"**.
 2. Tap **"▶ START SCANS DOWNLOAD"** to download all Crimson Ceremony disc scans.
 3. Tap **"▶ BATCH FETCH BOX ART"** to pre-download game covers.
 
