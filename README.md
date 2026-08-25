@@ -6,7 +6,7 @@ A web app and scraper designed to catalogue, inspect, and track **PS1 and PS2 PA
 
 ## Features
 
-- **Docker & Server Ready**: Pre-configured `Dockerfile` and `docker-compose.yml` with persistent `/data` volume for SQLite and downloaded images. Seamlessly runs behind **Nginx** reverse proxy and **Cloudflare Tunnels**.
+- **Docker Ready**: Pre-configured `Dockerfile` and `docker-compose.yml` with persistent `/data` volume for SQLite and downloaded images.
 - **Offline Scans & Image Cache**: Downloads and stores all disc face scans, front slipcases, back inlays, and variant covers locally inside the Docker volume.
 - **Real Game Box Art Integration**: Resolves and displays high-res PAL game box covers for playable demo games and trailers (supports official **IGDB / Twitch API** + open cover archives with retro fallback placeholders for non-game media/videos).
 - **Instant Search & Deep Filtering**: Search by demo title (`OPS2M Demo 46`), SCED code (`SCED-52161`), or game title (`Silent Hill`, `Tekken`, `Crash Bandicoot`).
