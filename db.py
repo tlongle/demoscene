@@ -1,6 +1,6 @@
 """
 Database management for SCENE.
-Handles SQLite storage for scraped demo discs and user collection state.
+Handles SQLite storage for scraped demo discs, assets, and user collection state.
 """
 import sqlite3
 import json
@@ -8,22 +8,32 @@ import os
 from typing import List, Dict, Any, Optional
 
 DB_PATH = os.environ.get("DEMOPALS_DB_PATH", "data/demopals.db")
-os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
+ASSETS_DIR = os.environ.get("ASSETS_DIR", "data/assets")
+DEMOPALS_ASSETS_DIR = os.path.join(ASSETS_DIR, "demopals")
+BOXART_ASSETS_DIR = os.path.join(ASSETS_DIR, "boxart")
 
 
 def get_db_connection(db_path: str = DB_PATH) -> sqlite3.Connection:
-    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    abs_path = os.path.abspath(db_path)
+    parent_dir = os.path.dirname(abs_path)
+    if parent_dir:
+        os.makedirs(parent_dir, exist_ok=True)
+    conn = sqlite3.connect(abs_path, timeout=30.0)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def init_db(db_path: str = DB_PATH) -> None:
     """Initialize database tables and indexes."""
-    conn = get_db_connection(db_path)
+    abs_path = os.path.abspath(db_path)
+    parent_dir = os.path.dirname(abs_path)
+    if parent_dir:
+        os.makedirs(parent_dir, exist_ok=True)
+
+    conn = get_db_connection(abs_path)
     cur = conn.cursor()
 
-    # Demos table
+    # Demos master table
     cur.execute("""
     CREATE TABLE IF NOT EXISTS demos (
         id TEXT PRIMARY KEY,
@@ -61,7 +71,7 @@ def init_db(db_path: str = DB_PATH) -> None:
     )
     """)
 
-    # Custom game cover cache
+    # Custom game cover cache table
     cur.execute("""
     CREATE TABLE IF NOT EXISTS game_covers (
         game_name TEXT PRIMARY KEY,
@@ -81,12 +91,103 @@ def init_db(db_path: str = DB_PATH) -> None:
     conn.close()
 
 
+def resolve_demo_assets(demo: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Ensure primary_thumbnail and variant scans always prioritize local downloaded
+    high-resolution Slipcase / Front Cover (-1.jpg) and High-Quality CD scan (-2.jpg).
+    """
+    section_url = demo.get("section_url", "")
+    parts = [p for p in section_url.split("/") if p and p != "index.php"]
+    subfolder = parts[-1] if parts else ""
+
+    variants = demo.get("variants", [])
+    primary_thumb = None
+
+    for v in variants:
+        img_key = v.get("img_key")
+        flag_icon = v.get("flag_icon")
+
+        if flag_icon:
+            flag_filename = flag_icon.split("/")[-1]
+            local_flag = os.path.join(DEMOPALS_ASSETS_DIR, flag_filename)
+            if os.path.exists(local_flag) and os.path.getsize(local_flag) > 0:
+                v["flag_icon"] = f"/assets/demopals/{flag_filename}"
+
+        scans = []
+        if img_key and subfolder:
+            folder_dir = os.path.join(DEMOPALS_ASSETS_DIR, subfolder)
+            remote_base = f"https://crimson-ceremony.net/demopals/{subfolder}/"
+
+            # 1. Slipcase / Front Cover (-1.jpg)
+            path_1 = os.path.join(folder_dir, f"{img_key}-1.jpg")
+            if os.path.exists(path_1) and os.path.getsize(path_1) > 0:
+                scans.append({
+                    "type": "cover_front",
+                    "label": "Slipcase / Cover Front",
+                    "local_url": f"/assets/demopals/{subfolder}/{img_key}-1.jpg",
+                    "remote_url": f"{remote_base}{img_key}-1.jpg"
+                })
+                if not primary_thumb:
+                    primary_thumb = f"/assets/demopals/{subfolder}/{img_key}-1.jpg"
+            else:
+                if not primary_thumb:
+                    primary_thumb = f"{remote_base}{img_key}-1.jpg"
+
+            # 2. High-Quality CD Scan (-2.jpg)
+            path_2 = os.path.join(folder_dir, f"{img_key}-2.jpg")
+            if os.path.exists(path_2) and os.path.getsize(path_2) > 0:
+                scans.append({
+                    "type": "disc_scan",
+                    "label": "High-Quality CD Scan",
+                    "local_url": f"/assets/demopals/{subfolder}/{img_key}-2.jpg",
+                    "remote_url": f"{remote_base}{img_key}-2.jpg"
+                })
+                if not primary_thumb:
+                    primary_thumb = f"/assets/demopals/{subfolder}/{img_key}-2.jpg"
+            elif not primary_thumb:
+                primary_thumb = f"{remote_base}{img_key}-2.jpg"
+
+            # 3. Extras (-3.jpg to -6.jpg)
+            labels = {
+                3: "Slipcase / Cover Back",
+                4: "Inlay / Booklet Scan",
+                5: "Alternate Scan",
+                6: "Alternate Scan"
+            }
+            for i in range(3, 7):
+                path_i = os.path.join(folder_dir, f"{img_key}-{i}.jpg")
+                if os.path.exists(path_i) and os.path.getsize(path_i) > 0:
+                    scans.append({
+                        "type": "alternate_art",
+                        "label": labels.get(i, f"Alternate Scan #{i}"),
+                        "local_url": f"/assets/demopals/{subfolder}/{img_key}-{i}.jpg",
+                        "remote_url": f"{remote_base}{img_key}-{i}.jpg"
+                    })
+
+            # 4. Low-Res thumbnail (-0.jpg) at the end as an extra
+            path_0 = os.path.join(folder_dir, f"{img_key}-0.jpg")
+            if os.path.exists(path_0) and os.path.getsize(path_0) > 0:
+                scans.append({
+                    "type": "thumb_overview",
+                    "label": "Overview Thumbnail (Low-Res)",
+                    "local_url": f"/assets/demopals/{subfolder}/{img_key}-0.jpg",
+                    "remote_url": f"{remote_base}{img_key}-0.jpg"
+                })
+
+        if scans:
+            v["scans"] = scans
+
+    if primary_thumb:
+        demo["primary_thumbnail"] = primary_thumb
+
+    return demo
+
+
 def save_demo(demo_data: Dict[str, Any], db_path: str = DB_PATH) -> None:
     """Insert or update a scraped demo entry."""
     conn = get_db_connection(db_path)
     cur = conn.cursor()
 
-    # Extract all game names for quick index search
     all_games = []
     contents = demo_data.get("categories", {})
     for cat_games in contents.values():
@@ -204,7 +305,6 @@ def get_demo(demo_id: str, db_path: str = DB_PATH) -> Optional[Dict[str, Any]]:
     demo["categories"] = json.loads(demo["contents_json"] or "{}")
     demo["variants"] = json.loads(demo["variants_json"] or "[]")
 
-    # Get collection status for all variants of this demo
     cur.execute("SELECT * FROM collection WHERE demo_id = ?", (demo_id,))
     coll_rows = cur.fetchall()
     collection_map = {}
@@ -213,7 +313,7 @@ def get_demo(demo_id: str, db_path: str = DB_PATH) -> Optional[Dict[str, Any]]:
 
     demo["collection"] = collection_map
     conn.close()
-    return demo
+    return resolve_demo_assets(demo)
 
 
 def search_demos(
@@ -268,17 +368,18 @@ def search_demos(
 
     where_sql = " AND ".join(where_clauses)
 
-    # Get total count
     count_sql = f"SELECT COUNT(DISTINCT d.id) FROM demos d {join_clause} WHERE {where_sql}"
     cur.execute(count_sql, params)
     total = cur.fetchone()[0]
 
-    # Get page results
     query_sql = f"""
         SELECT DISTINCT d.*, 
                c.status as coll_status, 
                c.condition as coll_condition, 
-               c.notes as coll_notes
+               c.notes as coll_notes,
+               c.has_sleeve as coll_has_sleeve,
+               c.has_case as coll_has_case,
+               c.is_working as coll_is_working
         FROM demos d
         {join_clause}
         WHERE {where_sql}
@@ -300,7 +401,7 @@ def search_demos(
         item["playable_count"] = len(item["categories"].get("Playable", []))
         item["trailer_count"] = len(item["categories"].get("Trailer", []))
         item["total_items"] = sum(len(v) for v in item["categories"].values())
-        results.append(item)
+        results.append(resolve_demo_assets(item))
 
     conn.close()
     return {
@@ -352,6 +453,53 @@ def update_collection(
         "is_working": is_working,
         "notes": notes
     }
+
+
+def bulk_update_collection(
+    demo_ids: List[str],
+    updates: Dict[str, Any],
+    variant_id: str = "default",
+    db_path: str = DB_PATH
+) -> int:
+    """
+    Bulk update collection records for multiple demo discs.
+    """
+    if not demo_ids:
+        return 0
+
+    conn = get_db_connection(db_path)
+    cur = conn.cursor()
+
+    count = 0
+    for did in demo_ids:
+        cur.execute("SELECT * FROM collection WHERE demo_id = ? AND variant_id = ?", (did, variant_id))
+        row = cur.fetchone()
+
+        status = updates.get("status", row["status"] if row else "owned")
+        condition = updates.get("condition", row["condition"] if row else "disc_only")
+        has_sleeve = updates.get("has_sleeve", row["has_sleeve"] if row else 0)
+        has_case = updates.get("has_case", row["has_case"] if row else 1)
+        is_working = updates.get("is_working", row["is_working"] if row else 1)
+        notes = updates.get("notes", row["notes"] if row else "")
+
+        cur.execute("""
+        INSERT INTO collection (
+            demo_id, variant_id, status, condition, has_sleeve, has_case, is_working, notes, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(demo_id, variant_id) DO UPDATE SET
+            status=excluded.status,
+            condition=excluded.condition,
+            has_sleeve=excluded.has_sleeve,
+            has_case=excluded.has_case,
+            is_working=excluded.is_working,
+            notes=excluded.notes,
+            updated_at=CURRENT_TIMESTAMP
+        """, (did, variant_id, status, condition, has_sleeve, has_case, is_working, notes))
+        count += 1
+
+    conn.commit()
+    conn.close()
+    return count
 
 
 def get_stats(db_path: str = DB_PATH) -> Dict[str, Any]:

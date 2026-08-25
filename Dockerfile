@@ -1,4 +1,4 @@
-# Multi-stage lightweight Python Dockerfile for SCENE
+# Lightweight Python Dockerfile for SCENE
 FROM python:3.12-slim
 
 # Prevent python from writing pyc files & buffering stdout
@@ -20,12 +20,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application source code
 COPY . .
 
-# Ensure data directories exist and create non-root user
-RUN mkdir -p /app/data/assets/demopals /app/data/assets/boxart && \
-    useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app
-
-USER appuser
+# Ensure data and asset storage directories exist
+RUN mkdir -p /app/data/assets/demopals /app/data/assets/boxart
 
 EXPOSE 8000
 
