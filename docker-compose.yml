@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  scene:
+    build: .
+    container_name: ps_scene
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - DEMOPALS_DB_PATH=/app/data/demopals.db
+      - ASSETS_DIR=/app/data/assets
+      # Official IGDB / Twitch API Credentials for Box Art
+      - TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID:-}
+      - TWITCH_CLIENT_SECRET=${TWITCH_CLIENT_SECRET:-}
+    volumes:
+      # Persistent storage for SQLite database and downloaded images
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/stats"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

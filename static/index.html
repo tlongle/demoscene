@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>SCENE</title>
+  <meta name="description" content="Clean PS1 & PS2 Demo Disc Collector & Box Art Archive." />
+  
+  <!-- PWA Settings -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#dcdcdc" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="PS Demos" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <div id="app" class="app-wrapper">
+    
+    <!-- Top Header -->
+    <header class="ps-header">
+      <div class="header-main">
+        <div class="brand">
+          <div class="ps-symbols">
+            <span class="sym-triangle">▲</span>
+            <span class="sym-cross">✖</span>
+            <span class="sym-square">■</span>
+            <span class="sym-circle">●</span>
+          </div>
+          <div>
+            <h1 class="brand-title">SCENE</h1>
+            <p class="brand-subtitle">PAL Demo Discs, Disc Scans &amp; Box Art</p>
+          </div>
+        </div>
+
+        <div class="header-nav">
+          <button class="ps-btn" id="btnMyCollection">🟢 My Collection</button>
+          <button class="ps-btn" id="btnBulkEdit">✏️ Bulk Edit</button>
+          <button class="ps-btn" id="btnSettings">⚙️ Settings</button>
+          <button class="ps-btn" id="btnStats">Stats</button>
+          <button class="ps-btn" id="btnAssets">Offline Assets</button>
+          <button class="ps-btn" id="btnBackup">Backup</button>
+          <button class="ps-btn ps-btn-dark" id="btnSync">Sync</button>
+        </div>
+      </div>
+
+      <!-- Stats Ledger Bar -->
+      <div class="stats-bar">
+        <div class="stat-item"><strong>Archive:</strong> <span id="statTotalDemos">872</span> Discs</div>
+        <div class="stat-item"><strong>Owned:</strong> <span class="txt-green" id="statOwnedDemos">0</span></div>
+        <div class="stat-item"><strong>Wishlist:</strong> <span class="txt-amber" id="statWantedDemos">0</span></div>
+        <div class="stat-item"><strong>Completion:</strong> <span id="statCompletionRate">0.0%</span></div>
+        <div class="stat-meter">
+          <div class="stat-meter-fill" id="headerProgressFill" style="width: 0%;"></div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Search & Filter Controls Panel -->
+    <section class="controls-panel">
+      <!-- Search Input -->
+      <div class="search-row">
+        <span class="search-label">SEARCH</span>
+        <input 
+          type="text" 
+          id="searchInput" 
+          placeholder="Search by demo title, SCED code, or game (e.g. 'OPS2M Demo 46', 'SCED-52161', 'Tekken')..." 
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button id="btnClearSearch" class="btn-clear" style="display: none;">✕</button>
+      </div>
+
+      <!-- Filter Controls -->
+      <div class="filters-row">
+        
+        <!-- Platform Selector -->
+        <div class="filter-cell">
+          <label>Platform</label>
+          <div class="btn-group" id="consolePills">
+            <button class="btn-toggle active" data-console="ALL">ALL</button>
+            <button class="btn-toggle" data-console="PS1">PS1</button>
+            <button class="btn-toggle" data-console="PS2">PS2</button>
+          </div>
+        </div>
+
+        <!-- Collection Status Selector -->
+        <div class="filter-cell">
+          <label>View / Status</label>
+          <div class="btn-group" id="statusPills">
+            <button class="btn-toggle active" data-status="ALL">All Discs</button>
+            <button class="btn-toggle btn-owned" data-status="owned">🟢 My Collection</button>
+            <button class="btn-toggle btn-wanted" data-status="wanted">🟡 Wishlist</button>
+            <button class="btn-toggle" data-status="unowned">⚪ Unowned</button>
+          </div>
+        </div>
+
+        <!-- Series Selector -->
+        <div class="filter-cell flex-fill">
+          <label for="selectSection">Series / Magazine</label>
+          <select id="selectSection" class="ps-select">
+            <option value="ALL">All Series / Magazines</option>
+          </select>
+        </div>
+
+        <!-- Region Selector -->
+        <div class="filter-cell">
+          <label for="selectCountry">Region</label>
+          <select id="selectCountry" class="ps-select">
+            <option value="ALL">All Regions</option>
+          </select>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Main Results Gallery -->
+    <main class="gallery-main">
+      <div class="gallery-header">
+        <div id="resultsCount">Loading discs...</div>
+        <div class="gallery-actions">
+          <button class="ps-btn ps-btn-sm" id="btnToggleBulk">✏️ Bulk Edit Mode</button>
+        </div>
+      </div>
+
+      <!-- Disc Grid -->
+      <div class="disc-grid" id="demoGrid">
+        <!-- Cards injected dynamically by app.js -->
+      </div>
+
+      <!-- Pagination -->
+      <div class="pagination-row" id="paginationContainer" style="display: none;">
+        <button class="ps-btn ps-btn-dark" id="btnLoadMore">Load More Discs</button>
+      </div>
+
+      <!-- Empty State -->
+      <div class="empty-box" id="emptyState" style="display: none;">
+        <div class="empty-icon">💿</div>
+        <h3>No demo discs found</h3>
+        <p>Try searching for another game, SCED code, or resetting active filters.</p>
+        <button class="ps-btn ps-btn-dark mt-2" id="btnResetFilters">Reset Filters</button>
+      </div>
+    </main>
+
+    <!-- Floating Bulk Edit Action Bar -->
+    <div id="bulkActionBar" class="bulk-action-bar" style="display: none;">
+      <div class="bulk-bar-info">
+        <strong id="bulkSelectedCount">0 Discs Selected</strong>
+        <div style="display: flex; gap: 4px;">
+          <button class="ps-btn ps-btn-sm" id="btnBulkSelectAll">Select All on Page</button>
+          <button class="ps-btn ps-btn-sm" id="btnBulkDeselectAll">Deselect All</button>
+        </div>
+      </div>
+      <div class="bulk-bar-actions">
+        <button class="ps-btn ps-btn-sm" id="btnQuickDiscOnly" title="Mark selected as Owned with Disc Only (Loose) condition">💿 Set Disc Only (Loose)</button>
+        <button class="ps-btn ps-btn-sm" id="btnQuickOwned">🟢 Mark Owned</button>
+        <button class="ps-btn ps-btn-sm" id="btnQuickWishlist">🟡 Mark Wishlist</button>
+        <button class="ps-btn ps-btn-dark ps-btn-sm" id="btnOpenBulkModal">⚙️ Custom Bulk Edit...</button>
+        <button class="ps-btn ps-btn-sm" id="btnExitBulk">✕ Exit</button>
+      </div>
+    </div>
+
+    <!-- Mobile Bottom Navigation Bar -->
+    <nav class="mobile-dock">
+      <button class="dock-btn active" data-nav="all">
+        <span>💿</span>
+        <span>All</span>
+      </button>
+      <button class="dock-btn" data-nav="owned">
+        <span>🟢</span>
+        <span>Owned</span>
+      </button>
+      <button class="dock-btn" data-nav="wanted">
+        <span>🟡</span>
+        <span>Wishlist</span>
+      </button>
+      <button class="dock-btn" data-nav="stats">
+        <span>📊</span>
+        <span>Stats</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- Detail Modal -->
+  <div class="modal-backdrop" id="detailModal">
+    <div class="modal-box modal-wide">
+      <div class="modal-head">
+        <span class="modal-head-title">Demo Disc Details</span>
+        <button class="modal-close-btn" id="btnCloseDetail">✕</button>
+      </div>
+      <div class="modal-content" id="detailModalContent">
+        <!-- Injected dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Zoom Modal -->
+  <div class="modal-backdrop" id="zoomModal">
+    <div class="zoom-box">
+      <button class="modal-close-btn zoom-close" id="btnCloseZoom">✕</button>
+      <img id="zoomImage" src="" alt="Scan preview" />
+      <div class="zoom-caption" id="zoomCaption"></div>
+    </div>
+  </div>
+
+  <!-- Stats Modal -->
+  <div class="modal-backdrop" id="statsModal">
+    <div class="modal-box">
+      <div class="modal-head">
+        <span class="modal-head-title">Collection Statistics</span>
+        <button class="modal-close-btn" id="btnCloseStats">✕</button>
+      </div>
+      <div class="modal-content" id="statsModalBody">
+        <!-- Injected dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Offline Assets Modal -->
+  <div class="modal-backdrop" id="assetsModal">
+    <div class="modal-box">
+      <div class="modal-head">
+        <span class="modal-head-title">Offline Assets Manager</span>
+        <button class="modal-close-btn" id="btnCloseAssets">✕</button>
+      </div>
+      <div class="modal-content">
+        <div class="section-box mb-2">
+          <h4>Download Disc &amp; Slipcase Scans</h4>
+          <p class="text-muted text-sm mb-2">Downloads all disc photos and sleeve scans from Crimson Ceremony to local storage.</p>
+          <button class="ps-btn ps-btn-dark" id="btnDownloadScans">Download All Scans</button>
+          <div id="scansDownloadStatus" class="mt-1 text-sm"></div>
+        </div>
+
+        <div class="section-box mt-2">
+          <h4>Batch Fetch Game Box Art</h4>
+          <p class="text-muted text-sm mb-2">Downloads high-resolution PAL box art for demo games and trailers.</p>
+          <button class="ps-btn" id="btnFetchBoxart">Fetch Game Box Art</button>
+          <div id="boxartFetchStatus" class="mt-1 text-sm"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Backup Modal -->
+  <div class="modal-backdrop" id="backupModal">
+    <div class="modal-box">
+      <div class="modal-head">
+        <span class="modal-head-title">Backup &amp; Restore</span>
+        <button class="modal-close-btn" id="btnCloseBackup">✕</button>
+      </div>
+      <div class="modal-content">
+        <div class="section-box mb-2">
+          <h4>Export Collection</h4>
+          <p class="text-muted text-sm mb-2">Save a JSON backup of your collection status and notes.</p>
+          <button class="ps-btn ps-btn-dark" id="btnExportJson">Export Backup (JSON)</button>
+        </div>
+        <div class="section-box mt-2">
+          <h4>Restore Collection</h4>
+          <p class="text-muted text-sm mb-2">Upload a previously exported JSON backup file.</p>
+          <input type="file" id="importFileInput" accept=".json" style="display: none;" />
+          <button class="ps-btn" id="btnImportJson">Restore Backup (JSON)</button>
+          <div id="importStatus" class="mt-1 text-sm"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal (IGDB API Configuration) -->
+  <div class="modal-backdrop" id="settingsModal">
+    <div class="modal-box">
+      <div class="modal-head">
+        <span class="modal-head-title">⚙️ API Settings (IGDB Cover Art)</span>
+        <button class="modal-close-btn" id="btnCloseSettings">✕</button>
+      </div>
+      <div class="modal-content">
+        <div class="section-box mb-2">
+          <h4>Official IGDB / Twitch Integration</h4>
+          <p class="text-muted text-sm mb-2">Configure Twitch credentials to fetch official, high-resolution 1080p game box covers.</p>
+          
+          <div id="igdbStatusBadge" class="mb-2" style="font-size: 12px; font-weight: 600;">
+            Checking status...
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div>
+              <label style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 2px;">Twitch Client ID</label>
+              <input type="text" id="txtTwitchClientId" placeholder="e.g. abcd1234efgh5678ijkl9012" style="width: 100%; padding: 6px 8px; border: 1px solid var(--ps1-border); font-family: var(--font-mono); font-size: 12px;" />
+            </div>
+            <div>
+              <label style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 2px;">Twitch Client Secret</label>
+              <input type="password" id="txtTwitchClientSecret" placeholder="••••••••••••••••••••••••••••••••" style="width: 100%; padding: 6px 8px; border: 1px solid var(--ps1-border); font-family: var(--font-mono); font-size: 12px;" />
+            </div>
+            
+            <button class="ps-btn ps-btn-dark mt-1" id="btnSaveSettings">Verify &amp; Save Credentials</button>
+            <div id="settingsFeedback" class="text-sm mt-1"></div>
+          </div>
+        </div>
+
+        <div class="notes-box">
+          <strong>📖 How to get your free keys:</strong>
+          <ol style="margin-left: 18px; margin-top: 4px; line-height: 1.5; font-size: 11px;">
+            <li>Go to <a href="https://dev.twitch.tv/console/apps" target="_blank" rel="noopener" style="color: #0050c8; font-weight: 600;">dev.twitch.tv/console/apps</a> and log in with your Twitch account.</li>
+            <li>Click <strong>Register Your Application</strong>.</li>
+            <li>Name: <em>PlayStation Demo Collector</em>, OAuth Redirect URL: <code>http://localhost</code>, Category: <em>Application Integration</em>.</li>
+            <li>Click <strong>Manage</strong>, copy the <strong>Client ID</strong> and generate a <strong>New Client Secret</strong>.</li>
+            <li>Paste them above and click <strong>Verify &amp; Save Credentials</strong>.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Edit Modal -->
+  <div class="modal-backdrop" id="bulkEditModal">
+    <div class="modal-box">
+      <div class="modal-head">
+        <span class="modal-head-title">✏️ Bulk Collection Editor</span>
+        <button class="modal-close-btn" id="btnCloseBulkModal">✕</button>
+      </div>
+      <div class="modal-content">
+        <div class="section-box mb-2">
+          <h4 id="bulkModalHeader">Batch Edit Selected Discs</h4>
+          <p class="text-muted text-sm mb-2">Change status, condition (e.g. Disc Only), and checklist attributes for all selected discs simultaneously.</p>
+
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <!-- Status Change -->
+            <div>
+              <label style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 2px;">Collection Status</label>
+              <select id="bulkStatusSelect" class="ps-select" style="width: 100%;">
+                <option value="keep">-- Keep Current Status --</option>
+                <option value="owned">🟢 Mark as In Collection (Owned)</option>
+                <option value="wanted">🟡 Mark as Wishlist (Wanted)</option>
+                <option value="unowned">⚪ Mark as Not Owned</option>
+              </select>
+            </div>
+
+            <!-- Physical Condition Change -->
+            <div>
+              <label style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 2px;">Physical Condition</label>
+              <select id="bulkConditionSelect" class="ps-select" style="width: 100%;">
+                <option value="keep">-- Keep Current Condition --</option>
+                <option value="disc_only" selected>💿 Disc Only (Loose CD/DVD)</option>
+                <option value="mint">Mint (Flawless with Sleeve/Case)</option>
+                <option value="good">Good (Minor scratches)</option>
+                <option value="acceptable">Acceptable (Plays fine)</option>
+                <option value="poor">Poor (Heavy marks)</option>
+              </select>
+            </div>
+
+            <!-- Sleeve / Case / Working Checklist -->
+            <div>
+              <label style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 4px;">Checklist Attributes</label>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 12px;">
+                <label class="collector-chk-label">
+                  <input type="checkbox" id="bulkChkSleeve" />
+                  <span>Original Sleeve / Inlay</span>
+                </label>
+                <label class="collector-chk-label">
+                  <input type="checkbox" id="bulkChkCase" checked />
+                  <span>Jewel / DVD Case</span>
+                </label>
+                <label class="collector-chk-label">
+                  <input type="checkbox" id="bulkChkWorking" checked />
+                  <span>Tested &amp; Working</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Collector Log Note -->
+            <div>
+              <label style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 2px;">Collector Notes (Optional)</label>
+              <input type="text" id="bulkTxtNotes" placeholder="e.g. CD only, bought loose at flea market..." style="width: 100%; padding: 6px 8px; border: 1px solid var(--ps1-border); font-size: 12px;" />
+            </div>
+
+            <button class="ps-btn ps-btn-dark mt-2" id="btnApplyBulkEdit">Apply Bulk Changes</button>
+            <div id="bulkModalFeedback" class="text-sm mt-1"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="ps-toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

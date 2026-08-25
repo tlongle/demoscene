@@ -1,0 +1,51 @@
+# ----------------------------------------------------------------------------
+# SCENE - PlayStation Demo Scene Collector .gitignore
+# ----------------------------------------------------------------------------
+
+# Environment & Sensitive Credentials (NEVER commit secrets to GitHub/GitLab!)
+.env
+*.env
+!.env.example
+
+# Python & Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local SQLite Databases & Runtime Cache
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+data/*.db
+data/*.db-journal
+demopals.db
+
+# Downloaded Binary Assets (Disc scans & box art - keep git repo small)
+data/assets/demopals/*
+!data/assets/demopals/.gitkeep
+data/assets/boxart/*
+!data/assets/boxart/.gitkeep
+
+# Temporary archives, logs, and export dumps
+*.tar.gz
+*.zip
+*.log
+ps-demo-collection-backup-*.json
+
+# OS & Editor specific files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
