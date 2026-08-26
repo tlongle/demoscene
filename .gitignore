@@ -1,8 +1,8 @@
 # ----------------------------------------------------------------------------
-# SCENE - PlayStation Demo Scene Collector .gitignore
+# SCENE
 # ----------------------------------------------------------------------------
 
-# Environment & Sensitive Credentials (NEVER commit secrets to GitHub/GitLab!)
+# Environment & Sensitive Credentials
 .env
 *.env
 !.env.example

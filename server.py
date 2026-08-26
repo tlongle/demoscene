@@ -23,7 +23,7 @@ os.makedirs(os.path.join(ASSETS_DIR, "demopals"), exist_ok=True)
 os.makedirs(os.path.join(ASSETS_DIR, "boxart"), exist_ok=True)
 
 app = FastAPI(
-    title="PlayStation Demo Scene Collector",
+    title="SCENE",
     description="Track and archive PS1 & PS2 demo discs, disc scans, slipcases, and box art",
     version="2.0.0"
 )
