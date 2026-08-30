@@ -1,13 +1,13 @@
 """
 Game Intel & Box Art Provider for PlayStation Demo Collector.
-Enriches games with official/open box art, retro PlayStation packaging aesthetics,
+Enriches games with official box art, retro PlayStation packaging aesthetics,
 and quick intel links (YouTube gameplay, MobyGames, Wikipedia, PSX Datacenter).
 """
 import re
 from urllib.parse import quote_plus
 from typing import Dict, Any, List
 
-import boxart_service
+from app.services.boxart import resolve_game_boxart
 
 GENRE_KEYWORDS = {
     "racing": ["racing", "rally", "gt", "gran turismo", "wrc", "burnout", "formula", "moto", "f1", "nascar", "colin mcrae", "toca", "extreme-g", "xg3", "speed", "riders", "super trucks", "le mans", "airblade"],
@@ -30,62 +30,47 @@ PALETTES = [
 
 
 def detect_genre(game_name: str) -> str:
-    """Detect general game genre based on title keywords."""
-    name_lower = game_name.lower()
+    """Guess general game genre based on title keywords."""
+    name_clean = game_name.lower()
     for genre, keywords in GENRE_KEYWORDS.items():
-        if any(kw in name_lower for kw in keywords):
-            return genre
-    return "Action / Adventure"
+        if any(kw in name_clean for kw in keywords):
+            return genre.upper()
+    return "PLAYSTATION"
 
 
-def get_game_intel(game_name: str, console: str = "PS2", category: str = "Playable") -> Dict[str, Any]:
-    """
-    Generate box art resolution, intel links, and retro packaging badge.
-    """
-    clean_name = re.sub(r"\s+", " ", game_name).strip()
-    encoded = quote_plus(f"{console} {clean_name}")
-    raw_encoded = quote_plus(clean_name)
+def get_game_intel(game_name: str, console: str = "PS2") -> Dict[str, Any]:
+    """Retrieve full intel metadata, box art URL, palette, and links for a specific game."""
+    genre = detect_genre(game_name)
+    
+    # Hash name to consistently pick a deterministic palette
+    palette_idx = sum(ord(c) for c in game_name) % len(PALETTES)
+    palette = PALETTES[palette_idx]
 
-    # Check if item is a video / trailer / making-of / non-game extra
-    is_media_extra = boxart_service.is_non_game_media(clean_name)
+    # Resolve official box art cover
+    art_info = resolve_game_boxart(game_name, console=console, auto_fetch=True)
 
-    # Box art resolution (IGDB / Wikipedia / open cache)
-    boxart_info = boxart_service.resolve_game_boxart(clean_name, console=console, auto_fetch=True)
-
-    # Palette for fallback badge
-    hash_val = sum(ord(c) for c in clean_name)
-    palette = PALETTES[hash_val % len(PALETTES)]
-    genre = detect_genre(clean_name)
-
-    # Direct search links
-    links = {
-        "youtube": f"https://www.youtube.com/results?search_query={encoded}+demo+gameplay" if not is_media_extra else f"https://www.youtube.com/results?search_query=PS2+{encoded}",
-        "mobygames": f"https://www.mobygames.com/search/quick?q={raw_encoded}",
-        "wikipedia": f"https://en.wikipedia.org/wiki/Special:Search?search={raw_encoded}+video+game",
-        "psxdatacenter": "https://psxdatacenter.com/psx2/pal_list2.html" if console == "PS2" else "https://psxdatacenter.com/pal_list.html",
-    }
-
-    words = [w for w in clean_name.split() if w.isalnum()]
-    initials = "".join(w[0] for w in words[:4]).upper() if words else "PS"
+    # Clean query for search links
+    q_encoded = quote_plus(f"{game_name} {console}")
 
     return {
-        "name": clean_name,
+        "name": game_name,
         "console": console,
-        "category": category,
-        "genre": genre if not is_media_extra else "Video / Media Extra",
-        "is_media_extra": is_media_extra,
-        "boxart_url": boxart_info.get("cover_url"),
-        "initials": initials,
+        "genre": genre,
+        "boxart_url": art_info.get("cover_url"),
+        "art_type": art_info.get("type", "boxart"),
         "palette": palette,
-        "links": links
+        "initials": "".join([w[0] for w in re.findall(r"[a-zA-Z0-9]+", game_name)])[:3].upper(),
+        "links": {
+            "youtube": f"https://www.youtube.com/results?search_query={q_encoded}+gameplay+psx",
+            "mobygames": f"https://www.mobygames.com/search/?q={quote_plus(game_name)}",
+            "wikipedia": f"https://en.wikipedia.org/wiki/Special:Search?search={quote_plus(game_name + ' video game')}"
+        }
     }
 
 
 def enrich_demo_contents(categories: Dict[str, List[str]], console: str = "PS2") -> Dict[str, List[Dict[str, Any]]]:
-    """
-    Enrich all category games with box art, intel, and retro styling.
-    """
+    """Enrich all game names inside category lists with full intel & box art."""
     enriched = {}
-    for cat_name, games in categories.items():
-        enriched[cat_name] = [get_game_intel(game, console, cat_name) for game in games]
+    for cat_name, game_list in categories.items():
+        enriched[cat_name] = [get_game_intel(g, console=console) for g in game_list]
     return enriched

@@ -1,5 +1,5 @@
 """
-Database management for SCENE.
+Database management for DEMOSCENE.
 Handles SQLite storage for scraped demo discs, assets, and user collection state.
 """
 import sqlite3
@@ -7,13 +7,12 @@ import json
 import os
 from typing import List, Dict, Any, Optional
 
-DB_PATH = os.environ.get("DEMOPALS_DB_PATH", "data/demopals.db")
-ASSETS_DIR = os.environ.get("ASSETS_DIR", "data/assets")
-DEMOPALS_ASSETS_DIR = os.path.join(ASSETS_DIR, "demopals")
-BOXART_ASSETS_DIR = os.path.join(ASSETS_DIR, "boxart")
+from app.core.config import settings
 
 
-def get_db_connection(db_path: str = DB_PATH) -> sqlite3.Connection:
+def get_db_connection(db_path: str = None) -> sqlite3.Connection:
+    if db_path is None:
+        db_path = settings.DB_PATH
     abs_path = os.path.abspath(db_path)
     parent_dir = os.path.dirname(abs_path)
     if parent_dir:
@@ -23,8 +22,10 @@ def get_db_connection(db_path: str = DB_PATH) -> sqlite3.Connection:
     return conn
 
 
-def init_db(db_path: str = DB_PATH) -> None:
+def init_db(db_path: str = None) -> None:
     """Initialize database tables and indexes."""
+    if db_path is None:
+        db_path = settings.DB_PATH
     abs_path = os.path.abspath(db_path)
     parent_dir = os.path.dirname(abs_path)
     if parent_dir:
@@ -87,8 +88,32 @@ def init_db(db_path: str = DB_PATH) -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_demos_title ON demos(title)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_collection_status ON collection(status)")
 
+    # Migration for Dedicated Demos or single-game discs with empty contents_json
+    cur.execute("SELECT id, title, section_name, contents_json FROM demos WHERE contents_json = '{}' OR contents_json IS NULL OR contents_json = ''")
+    empty_rows = cur.fetchall()
+    if empty_rows:
+        for r in empty_rows:
+            d_id, d_title, d_sec, _ = r
+            cats = ensure_demo_categories(d_title, {}, d_sec)
+            cats_json = json.dumps(cats)
+            game_idx = " | ".join(cats.get("Playable", [])).lower()
+            cur.execute("UPDATE demos SET contents_json = ?, game_names_index = ? WHERE id = ?", (cats_json, game_idx, d_id))
+
     conn.commit()
     conn.close()
+
+
+def ensure_demo_categories(demo_title: str, categories: Dict[str, List[str]], section_name: str = "") -> Dict[str, List[str]]:
+    """
+    Ensure dedicated demos or single-game discs have at least the game itself catalogued as Playable.
+    """
+    if not categories or not any(categories.values()):
+        import re
+        clean_title = re.sub(r"(?i)\s+(?:demo|sampler|special edition demo)\b", "", demo_title).strip()
+        if not clean_title:
+            clean_title = demo_title.strip()
+        return {"Playable": [clean_title]}
+    return categories
 
 
 def resolve_demo_assets(demo: Dict[str, Any]) -> Dict[str, Any]:
@@ -109,13 +134,13 @@ def resolve_demo_assets(demo: Dict[str, Any]) -> Dict[str, Any]:
 
         if flag_icon:
             flag_filename = flag_icon.split("/")[-1]
-            local_flag = os.path.join(DEMOPALS_ASSETS_DIR, flag_filename)
+            local_flag = os.path.join(settings.DEMOPALS_ASSETS_DIR, flag_filename)
             if os.path.exists(local_flag) and os.path.getsize(local_flag) > 0:
                 v["flag_icon"] = f"/assets/demopals/{flag_filename}"
 
         scans = []
         if img_key and subfolder:
-            folder_dir = os.path.join(DEMOPALS_ASSETS_DIR, subfolder)
+            folder_dir = os.path.join(settings.DEMOPALS_ASSETS_DIR, subfolder)
             remote_base = f"https://crimson-ceremony.net/demopals/{subfolder}/"
 
             # 1. Slipcase / Front Cover (-1.jpg)
@@ -183,7 +208,7 @@ def resolve_demo_assets(demo: Dict[str, Any]) -> Dict[str, Any]:
     return demo
 
 
-def save_demo(demo_data: Dict[str, Any], db_path: str = DB_PATH) -> None:
+def save_demo(demo_data: Dict[str, Any], db_path: str = None) -> None:
     """Insert or update a scraped demo entry."""
     conn = get_db_connection(db_path)
     cur = conn.cursor()
@@ -235,14 +260,16 @@ def save_demo(demo_data: Dict[str, Any], db_path: str = DB_PATH) -> None:
     conn.close()
 
 
-def save_demos_bulk(demos_list: List[Dict[str, Any]], db_path: str = DB_PATH) -> int:
+def save_demos_bulk(demos_list: List[Dict[str, Any]], db_path: str = None) -> int:
     """Bulk insert/update demos."""
     conn = get_db_connection(db_path)
     cur = conn.cursor()
 
     for demo_data in demos_list:
+        contents = ensure_demo_categories(demo_data["title"], demo_data.get("categories", {}), demo_data.get("section_name", ""))
+        demo_data["categories"] = contents
+
         all_games = []
-        contents = demo_data.get("categories", {})
         for cat_games in contents.values():
             all_games.extend(cat_games)
         game_names_index = " | ".join(all_games).lower()
@@ -278,7 +305,7 @@ def save_demos_bulk(demos_list: List[Dict[str, Any]], db_path: str = DB_PATH) ->
             demo_data.get("catalog_line", ""),
             json.dumps(demo_data.get("sced_codes", [])),
             demo_data.get("notes", ""),
-            json.dumps(demo_data.get("categories", {})),
+            json.dumps(contents),
             json.dumps(demo_data.get("variants", [])),
             demo_data.get("primary_thumbnail", ""),
             game_names_index
@@ -289,7 +316,7 @@ def save_demos_bulk(demos_list: List[Dict[str, Any]], db_path: str = DB_PATH) ->
     return len(demos_list)
 
 
-def get_demo(demo_id: str, db_path: str = DB_PATH) -> Optional[Dict[str, Any]]:
+def get_demo(demo_id: str, db_path: str = None) -> Optional[Dict[str, Any]]:
     """Retrieve full demo details by ID with collection status."""
     conn = get_db_connection(db_path)
     cur = conn.cursor()
@@ -302,7 +329,8 @@ def get_demo(demo_id: str, db_path: str = DB_PATH) -> Optional[Dict[str, Any]]:
 
     demo = dict(row)
     demo["sced_codes"] = json.loads(demo["sced_codes_json"] or "[]")
-    demo["categories"] = json.loads(demo["contents_json"] or "{}")
+    raw_cats = json.loads(demo["contents_json"] or "{}")
+    demo["categories"] = ensure_demo_categories(demo["title"], raw_cats, demo.get("section_name", ""))
     demo["variants"] = json.loads(demo["variants_json"] or "[]")
 
     cur.execute("SELECT * FROM collection WHERE demo_id = ?", (demo_id,))
@@ -324,7 +352,7 @@ def search_demos(
     collection_status: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
-    db_path: str = DB_PATH
+    db_path: str = None
 ) -> Dict[str, Any]:
     """Search and filter demos."""
     conn = get_db_connection(db_path)
@@ -396,7 +424,8 @@ def search_demos(
     for r in rows:
         item = dict(r)
         item["sced_codes"] = json.loads(item["sced_codes_json"] or "[]")
-        item["categories"] = json.loads(item["contents_json"] or "{}")
+        raw_cats = json.loads(item["contents_json"] or "{}")
+        item["categories"] = ensure_demo_categories(item["title"], raw_cats, item.get("section_name", ""))
         item["variants"] = json.loads(item["variants_json"] or "[]")
         item["playable_count"] = len(item["categories"].get("Playable", []))
         item["trailer_count"] = len(item["categories"].get("Trailer", []))
@@ -421,7 +450,7 @@ def update_collection(
     has_case: int = 1,
     is_working: int = 1,
     notes: str = "",
-    db_path: str = DB_PATH
+    db_path: str = None
 ) -> Dict[str, Any]:
     """Update or insert collection record for a demo/variant."""
     conn = get_db_connection(db_path)
@@ -459,7 +488,7 @@ def bulk_update_collection(
     demo_ids: List[str],
     updates: Dict[str, Any],
     variant_id: str = "default",
-    db_path: str = DB_PATH
+    db_path: str = None
 ) -> int:
     """
     Bulk update collection records for multiple demo discs.
@@ -502,8 +531,8 @@ def bulk_update_collection(
     return count
 
 
-def get_stats(db_path: str = DB_PATH) -> Dict[str, Any]:
-    """Calculate collection statistics."""
+def get_stats(db_path: str = None) -> Dict[str, Any]:
+    """Calculate detailed collection statistics."""
     conn = get_db_connection(db_path)
     cur = conn.cursor()
 
@@ -521,6 +550,41 @@ def get_stats(db_path: str = DB_PATH) -> Dict[str, Any]:
 
     cur.execute("SELECT COUNT(DISTINCT demo_id) FROM collection WHERE status = 'wanted'")
     wanted_demos = cur.fetchone()[0]
+
+    # Console breakdown for owned
+    cur.execute("""
+        SELECT COUNT(DISTINCT c.demo_id) 
+        FROM collection c 
+        JOIN demos d ON c.demo_id = d.id 
+        WHERE c.status = 'owned' AND d.console = 'PS1'
+    """)
+    owned_ps1 = cur.fetchone()[0]
+
+    cur.execute("""
+        SELECT COUNT(DISTINCT c.demo_id) 
+        FROM collection c 
+        JOIN demos d ON c.demo_id = d.id 
+        WHERE c.status = 'owned' AND d.console = 'PS2'
+    """)
+    owned_ps2 = cur.fetchone()[0]
+
+    # Physical Condition breakdown
+    cur.execute("""
+        SELECT condition, COUNT(*) as count 
+        FROM collection 
+        WHERE status = 'owned' 
+        GROUP BY condition
+    """)
+    cond_rows = dict(cur.fetchall())
+
+    cur.execute("SELECT COUNT(*) FROM collection WHERE status = 'owned' AND has_sleeve = 1")
+    count_sleeve = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM collection WHERE status = 'owned' AND has_case = 1")
+    count_case = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM collection WHERE status = 'owned' AND is_working = 1")
+    count_working = cur.fetchone()[0]
 
     cur.execute("""
         SELECT d.console, d.section_name, COUNT(DISTINCT d.id) as total,
@@ -540,12 +604,24 @@ def get_stats(db_path: str = DB_PATH) -> Dict[str, Any]:
         "total_ps2": total_ps2,
         "owned_demos": owned_demos,
         "wanted_demos": wanted_demos,
+        "owned_ps1": owned_ps1,
+        "owned_ps2": owned_ps2,
         "completion_rate": round((owned_demos / total_demos * 100) if total_demos else 0, 1),
+        "conditions": {
+            "disc_only": cond_rows.get("disc_only", 0),
+            "mint": cond_rows.get("mint", 0),
+            "good": cond_rows.get("good", 0),
+            "acceptable": cond_rows.get("acceptable", 0),
+            "poor": cond_rows.get("poor", 0),
+            "with_sleeve": count_sleeve,
+            "in_case": count_case,
+            "working": count_working
+        },
         "series_breakdown": series_breakdown
     }
 
 
-def export_collection_data(db_path: str = DB_PATH) -> Dict[str, Any]:
+def export_collection_data(db_path: str = None) -> Dict[str, Any]:
     """Export all collection records for backup."""
     conn = get_db_connection(db_path)
     cur = conn.cursor()
@@ -555,7 +631,7 @@ def export_collection_data(db_path: str = DB_PATH) -> Dict[str, Any]:
     return {"version": 1, "collection": rows}
 
 
-def import_collection_data(data: Dict[str, Any], db_path: str = DB_PATH) -> int:
+def import_collection_data(data: Dict[str, Any], db_path: str = None) -> int:
     """Import collection records from JSON backup."""
     records = data.get("collection", [])
     conn = get_db_connection(db_path)
@@ -588,3 +664,62 @@ def import_collection_data(data: Dict[str, Any], db_path: str = DB_PATH) -> int:
     conn.commit()
     conn.close()
     return count
+
+
+def get_collection_games(db_path: str = None) -> List[Dict[str, Any]]:
+    """Retrieve all unique games contained within owned collection demo discs."""
+    from app.services.intel import get_game_intel
+
+    conn = get_db_connection(db_path)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT d.id, d.title, d.console, d.section_name, d.catalog_line, d.sced_codes_json, d.contents_json, d.primary_thumbnail
+        FROM collection c
+        JOIN demos d ON c.demo_id = d.id
+        WHERE c.status = 'owned'
+    """)
+    rows = cur.fetchall()
+    conn.close()
+
+    games_map = {}
+    for r in rows:
+        demo_id = r["id"]
+        demo_title = r["title"]
+        console = r["console"]
+        sec_name = r["section_name"]
+        sceds = json.loads(r["sced_codes_json"] or "[]")
+        sced_code = sceds[0] if sceds else (r["catalog_line"] or "")
+        cats = ensure_demo_categories(demo_title, json.loads(r["contents_json"] or "{}"), sec_name)
+
+        for cat_name, g_list in cats.items():
+            for g_name in g_list:
+                clean_gname = g_name.strip()
+                if not clean_gname:
+                    continue
+                key = f"{console}:{clean_gname.lower()}"
+                if key not in games_map:
+                    intel = get_game_intel(clean_gname, console=console)
+                    games_map[key] = {
+                        **intel,
+                        "categories": [cat_name],
+                        "found_in": [{
+                            "demo_id": demo_id,
+                            "demo_title": demo_title,
+                            "sced": sced_code,
+                            "section_name": sec_name,
+                            "thumbnail": r["primary_thumbnail"]
+                        }]
+                    }
+                else:
+                    if cat_name not in games_map[key]["categories"]:
+                        games_map[key]["categories"].append(cat_name)
+                    if not any(f["demo_id"] == demo_id for f in games_map[key]["found_in"]):
+                        games_map[key]["found_in"].append({
+                            "demo_id": demo_id,
+                            "demo_title": demo_title,
+                            "sced": sced_code,
+                            "section_name": sec_name,
+                            "thumbnail": r["primary_thumbnail"]
+                        })
+
+    return sorted(list(games_map.values()), key=lambda x: x["name"].lower())

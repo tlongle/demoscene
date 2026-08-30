@@ -10,21 +10,15 @@ import time
 import requests
 from typing import Optional, Dict, Any, List
 
-import db
+from app.core.config import settings
+from app.core.database import get_db_connection
 
-ASSETS_DIR = os.environ.get("ASSETS_DIR", "data/assets")
-BOXART_DIR = os.path.join(ASSETS_DIR, "boxart")
-os.makedirs(BOXART_DIR, exist_ok=True)
-
-# Twitch / IGDB Credentials
-IGDB_CLIENT_ID = os.environ.get("TWITCH_CLIENT_ID", "")
-IGDB_CLIENT_SECRET = os.environ.get("TWITCH_CLIENT_SECRET", "")
 _igdb_token: Optional[str] = None
 _token_expiry: float = 0
 
 SESSION = requests.Session()
 SESSION.headers.update({
-    "User-Agent": "PlayStationDemoSceneCollector/2.0"
+    "User-Agent": "DEMOSCENE-Collector/2.0"
 })
 
 NON_GAME_PATTERNS = [
@@ -50,8 +44,8 @@ def sanitize_filename(name: str) -> str:
 
 def get_igdb_status() -> Dict[str, Any]:
     """Check current IGDB configuration status."""
-    client_id = os.environ.get("TWITCH_CLIENT_ID", "").strip()
-    client_secret = os.environ.get("TWITCH_CLIENT_SECRET", "").strip()
+    client_id = settings.TWITCH_CLIENT_ID
+    client_secret = settings.TWITCH_CLIENT_SECRET
     is_configured = bool(client_id and client_secret)
     masked_id = f"{client_id[:4]}...{client_id[-4:]}" if len(client_id) > 8 else ("Set" if client_id else "")
     
@@ -59,49 +53,6 @@ def get_igdb_status() -> Dict[str, Any]:
         "configured": is_configured,
         "client_id_masked": masked_id,
         "has_secret": bool(client_secret)
-    }
-
-
-def save_igdb_credentials(client_id: str, client_secret: str, env_file_path: str = ".env") -> Dict[str, Any]:
-    """Test and save Twitch / IGDB credentials to environment and .env file."""
-    client_id = client_id.strip()
-    client_secret = client_secret.strip()
-
-    # 1. Test credentials against Twitch token endpoint
-    test_result = test_twitch_credentials(client_id, client_secret)
-    if not test_result["success"]:
-        return test_result
-
-    # 2. Update runtime environment
-    global IGDB_CLIENT_ID, IGDB_CLIENT_SECRET, _igdb_token, _token_expiry
-    os.environ["TWITCH_CLIENT_ID"] = client_id
-    os.environ["TWITCH_CLIENT_SECRET"] = client_secret
-    IGDB_CLIENT_ID = client_id
-    IGDB_CLIENT_SECRET = client_secret
-    _igdb_token = test_result["token"]
-    _token_expiry = time.time() + test_result.get("expires_in", 3600) - 300
-
-    # 3. Write or update .env file
-    try:
-        env_lines = []
-        if os.path.exists(env_file_path):
-            with open(env_file_path, "r") as f:
-                for line in f:
-                    if line.startswith("TWITCH_CLIENT_ID=") or line.startswith("TWITCH_CLIENT_SECRET="):
-                        continue
-                    env_lines.append(line)
-
-        env_lines.append(f"TWITCH_CLIENT_ID={client_id}\n")
-        env_lines.append(f"TWITCH_CLIENT_SECRET={client_secret}\n")
-
-        with open(env_file_path, "w") as f:
-            f.writelines(env_lines)
-    except Exception as e:
-        print(f"⚠️ Warning: Could not write to .env file: {e}")
-
-    return {
-        "success": True,
-        "message": "Twitch / IGDB credentials verified and saved successfully!"
     }
 
 
@@ -132,11 +83,52 @@ def test_twitch_credentials(client_id: str, client_secret: str) -> Dict[str, Any
         return {"success": False, "error": f"Connection error: {str(e)}"}
 
 
+def save_igdb_credentials(client_id: str, client_secret: str, env_file_path: str = ".env") -> Dict[str, Any]:
+    """Test and save Twitch / IGDB credentials to environment and .env file."""
+    client_id = client_id.strip()
+    client_secret = client_secret.strip()
+
+    # 1. Test credentials against Twitch token endpoint
+    test_result = test_twitch_credentials(client_id, client_secret)
+    if not test_result["success"]:
+        return test_result
+
+    # 2. Update runtime environment
+    global _igdb_token, _token_expiry
+    os.environ["TWITCH_CLIENT_ID"] = client_id
+    os.environ["TWITCH_CLIENT_SECRET"] = client_secret
+    _igdb_token = test_result["token"]
+    _token_expiry = time.time() + test_result.get("expires_in", 3600) - 300
+
+    # 3. Write or update .env file
+    try:
+        env_lines = []
+        if os.path.exists(env_file_path):
+            with open(env_file_path, "r") as f:
+                for line in f:
+                    if line.startswith("TWITCH_CLIENT_ID=") or line.startswith("TWITCH_CLIENT_SECRET="):
+                        continue
+                    env_lines.append(line)
+
+        env_lines.append(f"TWITCH_CLIENT_ID={client_id}\n")
+        env_lines.append(f"TWITCH_CLIENT_SECRET={client_secret}\n")
+
+        with open(env_file_path, "w") as f:
+            f.writelines(env_lines)
+    except Exception as e:
+        print(f"⚠️ Warning: Could not write to .env file: {e}")
+
+    return {
+        "success": True,
+        "message": "Twitch / IGDB credentials verified and saved successfully!"
+    }
+
+
 def get_igdb_access_token() -> Optional[str]:
     """Obtain or refresh Twitch OAuth token for IGDB."""
     global _igdb_token, _token_expiry
-    client_id = os.environ.get("TWITCH_CLIENT_ID", "").strip()
-    client_secret = os.environ.get("TWITCH_CLIENT_SECRET", "").strip()
+    client_id = settings.TWITCH_CLIENT_ID
+    client_secret = settings.TWITCH_CLIENT_SECRET
 
     if not client_id or not client_secret:
         return None
@@ -155,7 +147,7 @@ def get_igdb_access_token() -> Optional[str]:
 
 def get_cached_boxart_path(game_name: str, console: str = "PS2") -> Optional[str]:
     """Check if box art exists in SQLite or locally on disk."""
-    conn = db.get_db_connection()
+    conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("SELECT cover_url FROM game_covers WHERE game_name = ?", (game_name,))
     row = cur.fetchone()
@@ -168,7 +160,7 @@ def get_cached_boxart_path(game_name: str, console: str = "PS2") -> Optional[str
 
     slug = sanitize_filename(f"{console}_{game_name}")
     for ext in [".jpg", ".png", ".webp"]:
-        candidate = os.path.join(BOXART_DIR, f"{slug}{ext}")
+        candidate = os.path.join(settings.BOXART_ASSETS_DIR, f"{slug}{ext}")
         if os.path.exists(candidate):
             url_path = f"/assets/boxart/{slug}{ext}"
             record_boxart(game_name, url_path, "disk")
@@ -179,7 +171,7 @@ def get_cached_boxart_path(game_name: str, console: str = "PS2") -> Optional[str
 
 def record_boxart(game_name: str, cover_url: str, source: str = "igdb") -> None:
     """Record box art URL into SQLite."""
-    conn = db.get_db_connection()
+    conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("""
     INSERT INTO game_covers (game_name, cover_url, source, updated_at)
@@ -214,7 +206,7 @@ def download_and_save_boxart(image_url: str, game_name: str, console: str = "PS2
 
         slug = sanitize_filename(f"{console}_{game_name}")
         file_name = f"{slug}{ext}"
-        file_path = os.path.join(BOXART_DIR, file_name)
+        file_path = os.path.join(settings.BOXART_ASSETS_DIR, file_name)
 
         with open(file_path, "wb") as f:
             f.write(res.content)
@@ -229,7 +221,7 @@ def download_and_save_boxart(image_url: str, game_name: str, console: str = "PS2
 def fetch_igdb_boxart(game_name: str, console: str = "PS2") -> Optional[str]:
     """Fetch official high-res box art from IGDB."""
     token = get_igdb_access_token()
-    client_id = os.environ.get("TWITCH_CLIENT_ID", "").strip()
+    client_id = settings.TWITCH_CLIENT_ID
     if not token or not client_id:
         return None
 
@@ -325,7 +317,7 @@ def resolve_game_boxart(game_name: str, console: str = "PS2", auto_fetch: bool =
 
 def batch_fetch_boxart(limit: int = 150, console: Optional[str] = None) -> Dict[str, int]:
     """Pre-fetch and download box art for games via IGDB."""
-    conn = db.get_db_connection()
+    conn = get_db_connection()
     cur = conn.cursor()
     where = f"WHERE console = '{console}'" if console else ""
     cur.execute(f"SELECT contents_json, console FROM demos {where}")

@@ -1,14 +1,14 @@
 version: '3.8'
 
 services:
-  scene:
+  demoscene:
     build: .
-    container_name: ps_scene
+    container_name: demoscene
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "5363:5363"
     environment:
-      - PORT=8000
+      - PORT=5363
       - DEMOPALS_DB_PATH=/app/data/demopals.db
       - ASSETS_DIR=/app/data/assets
       # Official IGDB / Twitch API Credentials for Box Art
@@ -18,7 +18,7 @@ services:
       # Persistent storage for SQLite database and downloaded images
       - ./data:/app/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/stats"]
+      test: ["CMD", "curl", "-f", "http://localhost:5363/api/stats"]
       interval: 30s
       timeout: 5s
       retries: 3

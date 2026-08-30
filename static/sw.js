@@ -1,14 +1,16 @@
 /**
- * Service Worker for PlayStation Demo Scene Collector PWA
+ * Service Worker for DEMOSCENE PWA
  * Provides offline caching for app shell, UI assets, and disc artwork
  */
 
-const CACHE_NAME = "ps-demopals-v2";
+const CACHE_NAME = "demoscene-v3";
 const APP_SHELL = [
   "/",
   "/index.html",
   "/style.css",
   "/app.js",
+  "/logo.png",
+  "/logo.ico",
   "/manifest.json",
   "/icons/icon-192.png",
   "/icons/icon-512.png"

@@ -1,5 +1,5 @@
 """
-FastAPI Server for PlayStation Demo Scene Collector.
+FastAPI Server for PlayStation Demo Collector (DEMOSCENE).
 Supports Docker containerization, Nginx reverse proxy, Cloudflare Tunnels, and local asset caching.
 """
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, Request
@@ -11,19 +11,15 @@ import socket
 import os
 import json
 
-import db
-import scraper
-import game_intel
-import download_assets
-import boxart_service
-
-ASSETS_DIR = os.environ.get("ASSETS_DIR", "data/assets")
-os.makedirs(ASSETS_DIR, exist_ok=True)
-os.makedirs(os.path.join(ASSETS_DIR, "demopals"), exist_ok=True)
-os.makedirs(os.path.join(ASSETS_DIR, "boxart"), exist_ok=True)
+from app.core.config import settings
+import app.core.database as db
+from app.services import scraper
+from app.services import intel as game_intel
+from app.services import downloader as download_assets
+from app.services import boxart as boxart_service
 
 app = FastAPI(
-    title="SCENE",
+    title="DEMOSCENE",
     description="Track and archive PS1 & PS2 demo discs, disc scans, slipcases, and box art",
     version="2.0.0"
 )
@@ -89,6 +85,7 @@ def update_settings(payload: SettingsPayload):
 @app.on_event("startup")
 def startup_event():
     """Initialize DB and trigger initial scrape if empty."""
+    settings.ensure_dirs()
     db.init_db()
     stats = db.get_stats()
     if stats["total_demos"] == 0:
@@ -97,7 +94,7 @@ def startup_event():
 
 
 # Mount local assets for disc photos, slipcase scans, and box art
-app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
+app.mount("/assets", StaticFiles(directory=settings.ASSETS_DIR), name="assets")
 
 
 @app.get("/api/demos")
@@ -191,54 +188,58 @@ def get_collection_stats():
     return db.get_stats()
 
 
+@app.get("/api/collection/games")
+def get_collection_games():
+    """Retrieve all unique games contained within owned demo discs."""
+    return db.get_collection_games()
+
+
 @app.get("/api/filters")
 def get_filter_options():
     """Retrieve unique filter options (consoles, sections, countries)."""
     conn = db.get_db_connection()
     cur = conn.cursor()
 
-    cur.execute("SELECT DISTINCT console FROM demos ORDER BY console")
-    consoles = [r[0] for r in cur.fetchall()]
+    cur.execute("SELECT DISTINCT console, section_name FROM demos ORDER BY console, section_name")
+    sections = [{"console": r["console"], "name": r["section_name"]} for r in cur.fetchall()]
 
-    cur.execute("SELECT DISTINCT section_name, console FROM demos ORDER BY console, section_name")
-    sections = [{"name": r[0], "console": r[1]} for r in cur.fetchall()]
-
-    cur.execute("SELECT variants_json FROM demos")
-    all_variants_rows = cur.fetchall()
+    cur.execute("SELECT DISTINCT variants_json FROM demos")
+    all_variants_raw = cur.fetchall()
     countries = set()
-    for row in all_variants_rows:
-        try:
-            vars_list = json.loads(row[0] or "[]")
-            for v in vars_list:
-                if v.get("country"):
-                    countries.add(v["country"])
-        except Exception:
-            pass
+    for row in all_variants_raw:
+        if row[0]:
+            try:
+                v_list = json.loads(row[0])
+                for v in v_list:
+                    if v.get("country"):
+                        countries.add(v["country"])
+            except Exception:
+                pass
 
     conn.close()
     return {
-        "consoles": consoles,
+        "consoles": ["PS1", "PS2"],
         "sections": sections,
         "countries": sorted(list(countries))
     }
 
 
 @app.get("/api/export")
-def export_collection():
-    """Export user's collection data as JSON backup."""
+def export_backup():
+    """Export complete collection data for JSON backup."""
     return db.export_collection_data()
 
 
 @app.post("/api/import")
-def import_collection(payload: ImportPayload):
-    """Restore collection data from JSON backup."""
+def import_backup(payload: ImportPayload):
+    """Import and merge JSON backup collection records."""
     count = db.import_collection_data(payload.dict())
-    return {"success": True, "imported_records": count}
+    return {"success": True, "imported_count": count}
 
 
 @app.post("/api/scrape")
 def trigger_scrape(background_tasks: BackgroundTasks):
-    """Trigger background refresh scrape of Crimson Ceremony archive."""
+    """Trigger background scrape of crimson-ceremony.net/demopals."""
     background_tasks.add_task(scraper.run_scraper, verbose=True)
     return {"success": True, "message": "Scraper task queued."}
 
@@ -257,47 +258,16 @@ def trigger_boxart_fetch(background_tasks: BackgroundTasks, limit: int = 150):
     return {"success": True, "message": f"Box art download queued for up to {limit} games."}
 
 
-def get_local_ip() -> str:
-    """Detect local LAN IP for phone mobile access."""
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
-    except Exception:
-        return "127.0.0.1"
-
-
-@app.get("/api/network-info")
-def get_network_info(request: Request):
-    """Get local IP, port, and forwarded host for pairing."""
-    ip = get_local_ip()
-    port = int(os.environ.get("PORT", 8000))
-    host_header = request.headers.get("x-forwarded-host") or request.headers.get("host")
-    proto = request.headers.get("x-forwarded-proto") or "http"
-    public_url = f"{proto}://{host_header}" if host_header else f"http://{ip}:{port}"
-
-    return {
-        "local_ip": ip,
-        "port": port,
-        "mobile_url": public_url
-    }
-
-
 # Mount static files directory
-os.makedirs("static", exist_ok=True)
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+app.mount("/", StaticFiles(directory=settings.STATIC_DIR, html=True), name="static")
 
 
 if __name__ == "__main__":
     import uvicorn
-    local_ip = get_local_ip()
-    port = int(os.environ.get("PORT", 8000))
-    print(f"\n========================================================")
-    print(f"🎮 PlayStation Demo Scene Collector Web App")
-    print(f"========================================================")
-    print(f"💻 Desktop: http://localhost:{port}")
-    print(f"📱 Mobile:  http://{local_ip}:{port}")
-    print(f"========================================================\n")
-    uvicorn.run("server:app", host="0.0.0.0", port=port, reload=True)
+    print("\n" + "═" * 60)
+    print("DEMOSCENE - PlayStation Demo Collector Web App")
+    print("═" * 60)
+    print(f"Desktop: http://localhost:{settings.PORT}")
+    print("═" * 60 + "\n")
+    uvicorn.run("app.main:app", host=settings.HOST, port=settings.PORT, reload=True)
+

@@ -1,6 +1,6 @@
 {
-  "name": "PlayStation Demo Scene Collector",
-  "short_name": "DemoScene",
+  "name": "DEMOSCENE - PlayStation Demo Collector",
+  "short_name": "DEMOSCENE",
   "description": "Retro PlayStation PS1 & PS2 Demo Disc Collector & Archive",
   "start_url": "/",
   "display": "standalone",
