@@ -18,6 +18,7 @@ def get_db_connection(db_path: str = None) -> sqlite3.Connection:
     if parent_dir:
         os.makedirs(parent_dir, exist_ok=True)
     conn = sqlite3.connect(abs_path, timeout=30.0)
+    conn.execute("PRAGMA foreign_keys = ON")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -72,15 +73,35 @@ def init_db(db_path: str = None) -> None:
     )
     """)
 
-    # Custom game cover cache table
+    # Custom game cover cache table (composite primary key on console + game_name)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS game_covers (
-        game_name TEXT PRIMARY KEY,
+        console TEXT NOT NULL DEFAULT 'PS2',
+        game_name TEXT NOT NULL,
         cover_url TEXT NOT NULL,
         source TEXT DEFAULT 'auto',
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (console, game_name)
     )
     """)
+
+    # Check migration for game_covers composite PK
+    cur.execute("PRAGMA table_info(game_covers)")
+    cover_cols = [c["name"] for c in cur.fetchall()]
+    if "console" not in cover_cols:
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS game_covers_new (
+            console TEXT NOT NULL DEFAULT 'PS2',
+            game_name TEXT NOT NULL,
+            cover_url TEXT NOT NULL,
+            source TEXT DEFAULT 'auto',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (console, game_name)
+        )
+        """)
+        cur.execute("INSERT OR REPLACE INTO game_covers_new (console, game_name, cover_url, source, updated_at) SELECT 'PS2', game_name, cover_url, source, updated_at FROM game_covers")
+        cur.execute("DROP TABLE game_covers")
+        cur.execute("ALTER TABLE game_covers_new RENAME TO game_covers")
 
     # Indexes for lightning-fast search
     cur.execute("CREATE INDEX IF NOT EXISTS idx_demos_console ON demos(console)")
@@ -382,8 +403,8 @@ def search_demos(
         params.extend([q_param, q_param, q_param, q_param, q_param])
 
     if country and country != "ALL":
-        where_clauses.append("d.variants_json LIKE ?")
-        params.append(f'%"country": "{country}"%')
+        where_clauses.append("EXISTS (SELECT 1 FROM json_each(d.variants_json) WHERE json_extract(value, '$.country') LIKE ?)")
+        params.append(country)
 
     # Collection filter join
     join_clause = "LEFT JOIN collection c ON d.id = c.demo_id"
@@ -430,7 +451,9 @@ def search_demos(
         item["playable_count"] = len(item["categories"].get("Playable", []))
         item["trailer_count"] = len(item["categories"].get("Trailer", []))
         item["total_items"] = sum(len(v) for v in item["categories"].values())
-        results.append(resolve_demo_assets(item))
+        if not item.get("primary_thumbnail") and item["variants"]:
+            item["primary_thumbnail"] = item["variants"][0].get("thumb_img") or "/assets/demopals/f-eur.jpg"
+        results.append(item)
 
     conn.close()
     return {
@@ -505,8 +528,8 @@ def bulk_update_collection(
         row = cur.fetchone()
 
         status = updates.get("status", row["status"] if row else "owned")
-        condition = updates.get("condition", row["condition"] if row else "disc_only")
-        has_sleeve = updates.get("has_sleeve", row["has_sleeve"] if row else 0)
+        condition = updates.get("condition", row["condition"] if row else "good")
+        has_sleeve = updates.get("has_sleeve", row["has_sleeve"] if row else 1)
         has_case = updates.get("has_case", row["has_case"] if row else 1)
         is_working = updates.get("is_working", row["is_working"] if row else 1)
         notes = updates.get("notes", row["notes"] if row else "")
@@ -536,39 +559,23 @@ def get_stats(db_path: str = None) -> Dict[str, Any]:
     conn = get_db_connection(db_path)
     cur = conn.cursor()
 
-    cur.execute("SELECT COUNT(*) FROM demos")
-    total_demos = cur.fetchone()[0]
-
-    cur.execute("SELECT COUNT(*) FROM demos WHERE console = 'PS1'")
-    total_ps1 = cur.fetchone()[0]
-
-    cur.execute("SELECT COUNT(*) FROM demos WHERE console = 'PS2'")
-    total_ps2 = cur.fetchone()[0]
-
-    cur.execute("SELECT COUNT(DISTINCT demo_id) FROM collection WHERE status = 'owned'")
-    owned_demos = cur.fetchone()[0]
-
-    cur.execute("SELECT COUNT(DISTINCT demo_id) FROM collection WHERE status = 'wanted'")
-    wanted_demos = cur.fetchone()[0]
-
-    # Console breakdown for owned
     cur.execute("""
-        SELECT COUNT(DISTINCT c.demo_id) 
-        FROM collection c 
-        JOIN demos d ON c.demo_id = d.id 
-        WHERE c.status = 'owned' AND d.console = 'PS1'
+        SELECT 
+            COUNT(DISTINCT d.id) as total_demos,
+            COUNT(DISTINCT CASE WHEN d.console = 'PS1' THEN d.id END) as total_ps1,
+            COUNT(DISTINCT CASE WHEN d.console = 'PS2' THEN d.id END) as total_ps2,
+            COUNT(DISTINCT CASE WHEN c.status = 'owned' THEN d.id END) as owned_demos,
+            COUNT(DISTINCT CASE WHEN c.status = 'wanted' THEN d.id END) as wanted_demos,
+            COUNT(DISTINCT CASE WHEN c.status = 'owned' AND d.console = 'PS1' THEN d.id END) as owned_ps1,
+            COUNT(DISTINCT CASE WHEN c.status = 'owned' AND d.console = 'PS2' THEN d.id END) as owned_ps2,
+            COUNT(DISTINCT CASE WHEN c.status = 'owned' AND c.has_sleeve = 1 THEN d.id END) as count_sleeve,
+            COUNT(DISTINCT CASE WHEN c.status = 'owned' AND c.has_case = 1 THEN d.id END) as count_case,
+            COUNT(DISTINCT CASE WHEN c.status = 'owned' AND c.is_working = 1 THEN d.id END) as count_working
+        FROM demos d
+        LEFT JOIN collection c ON d.id = c.demo_id
     """)
-    owned_ps1 = cur.fetchone()[0]
+    totals = dict(cur.fetchone())
 
-    cur.execute("""
-        SELECT COUNT(DISTINCT c.demo_id) 
-        FROM collection c 
-        JOIN demos d ON c.demo_id = d.id 
-        WHERE c.status = 'owned' AND d.console = 'PS2'
-    """)
-    owned_ps2 = cur.fetchone()[0]
-
-    # Physical Condition breakdown
     cur.execute("""
         SELECT condition, COUNT(*) as count 
         FROM collection 
@@ -576,15 +583,6 @@ def get_stats(db_path: str = None) -> Dict[str, Any]:
         GROUP BY condition
     """)
     cond_rows = dict(cur.fetchall())
-
-    cur.execute("SELECT COUNT(*) FROM collection WHERE status = 'owned' AND has_sleeve = 1")
-    count_sleeve = cur.fetchone()[0]
-
-    cur.execute("SELECT COUNT(*) FROM collection WHERE status = 'owned' AND has_case = 1")
-    count_case = cur.fetchone()[0]
-
-    cur.execute("SELECT COUNT(*) FROM collection WHERE status = 'owned' AND is_working = 1")
-    count_working = cur.fetchone()[0]
 
     cur.execute("""
         SELECT d.console, d.section_name, COUNT(DISTINCT d.id) as total,
@@ -596,16 +594,19 @@ def get_stats(db_path: str = None) -> Dict[str, Any]:
         ORDER BY d.console, d.section_name
     """)
     series_breakdown = [dict(r) for r in cur.fetchall()]
-
     conn.close()
+
+    total_demos = totals["total_demos"]
+    owned_demos = totals["owned_demos"]
+
     return {
         "total_demos": total_demos,
-        "total_ps1": total_ps1,
-        "total_ps2": total_ps2,
+        "total_ps1": totals["total_ps1"],
+        "total_ps2": totals["total_ps2"],
         "owned_demos": owned_demos,
-        "wanted_demos": wanted_demos,
-        "owned_ps1": owned_ps1,
-        "owned_ps2": owned_ps2,
+        "wanted_demos": totals["wanted_demos"],
+        "owned_ps1": totals["owned_ps1"],
+        "owned_ps2": totals["owned_ps2"],
         "completion_rate": round((owned_demos / total_demos * 100) if total_demos else 0, 1),
         "conditions": {
             "disc_only": cond_rows.get("disc_only", 0),
@@ -613,9 +614,9 @@ def get_stats(db_path: str = None) -> Dict[str, Any]:
             "good": cond_rows.get("good", 0),
             "acceptable": cond_rows.get("acceptable", 0),
             "poor": cond_rows.get("poor", 0),
-            "with_sleeve": count_sleeve,
-            "in_case": count_case,
-            "working": count_working
+            "with_sleeve": totals["count_sleeve"],
+            "in_case": totals["count_case"],
+            "working": totals["count_working"]
         },
         "series_breakdown": series_breakdown
     }
@@ -667,7 +668,7 @@ def import_collection_data(data: Dict[str, Any], db_path: str = None) -> int:
 
 
 def get_collection_games(db_path: str = None) -> List[Dict[str, Any]]:
-    """Retrieve all unique games contained within owned collection demo discs."""
+    """Retrieve all unique playable games contained within owned collection demo discs."""
     from app.services.intel import get_game_intel
 
     conn = get_db_connection(db_path)
@@ -692,6 +693,11 @@ def get_collection_games(db_path: str = None) -> List[Dict[str, Any]]:
         cats = ensure_demo_categories(demo_title, json.loads(r["contents_json"] or "{}"), sec_name)
 
         for cat_name, g_list in cats.items():
+            # Only include Playable categories (skip Trailers, Videos, Saves, FMV, Notes, etc.)
+            cat_lower = cat_name.strip().lower()
+            if not (cat_lower.startswith("playable") or cat_lower == "net yaroze"):
+                continue
+
             for g_name in g_list:
                 clean_gname = g_name.strip()
                 if not clean_gname:

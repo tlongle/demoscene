@@ -4,6 +4,10 @@ Centralizes environment variables, port bindings, and storage paths.
 """
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load local .env if present
+load_dotenv()
 
 
 class Settings:
@@ -11,18 +15,16 @@ class Settings:
     PORT: int = int(os.environ.get("PORT", 5363))
     HOST: str = os.environ.get("HOST", "0.0.0.0")
 
-    # Base Paths
+    # Security & Access Control
+    ADMIN_API_KEY: str = os.environ.get("ADMIN_API_KEY", "").strip()
+    CORS_ORIGINS: str = os.environ.get("CORS_ORIGINS", "*").strip()
+
+    # Storage Paths
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
-    
-    # SQLite Database Path
     DB_PATH: str = os.environ.get("DEMOPALS_DB_PATH", str(BASE_DIR / "data" / "demopals.db"))
-    
-    # Asset Storage Paths
     ASSETS_DIR: str = os.environ.get("ASSETS_DIR", str(BASE_DIR / "data" / "assets"))
-    DEMOPALS_ASSETS_DIR: str = os.path.join(ASSETS_DIR, "demopals")
-    BOXART_ASSETS_DIR: str = os.path.join(ASSETS_DIR, "boxart")
-    
-    # Static Web Files Path
+    DEMOPALS_ASSETS_DIR: str = str(Path(ASSETS_DIR) / "demopals")
+    BOXART_ASSETS_DIR: str = str(Path(ASSETS_DIR) / "boxart")
     STATIC_DIR: str = str(BASE_DIR / "static")
 
     # IGDB / Twitch API Credentials
@@ -36,13 +38,8 @@ class Settings:
 
     def ensure_dirs(self) -> None:
         """Ensure all required data and asset storage directories exist."""
-        db_parent = os.path.dirname(os.path.abspath(self.DB_PATH))
-        if db_parent:
-            os.makedirs(db_parent, exist_ok=True)
-        os.makedirs(self.ASSETS_DIR, exist_ok=True)
-        os.makedirs(self.DEMOPALS_ASSETS_DIR, exist_ok=True)
-        os.makedirs(self.BOXART_ASSETS_DIR, exist_ok=True)
-        os.makedirs(self.STATIC_DIR, exist_ok=True)
+        for path in (Path(self.DB_PATH).parent, Path(self.DEMOPALS_ASSETS_DIR), Path(self.BOXART_ASSETS_DIR), Path(self.STATIC_DIR)):
+            path.mkdir(parents=True, exist_ok=True)
 
 
 settings = Settings()

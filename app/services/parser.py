@@ -87,17 +87,17 @@ def parse_block(block_text: str, default_console: str = "PS1") -> Dict[str, Any]
             if not current_variant:
                 current_variant = {"disc_title": title, "country": "Europe", "sced": "", "img_key": ""}
 
-            if item.endswith(".jpg") or item.endswith(".png") or item.endswith(".gif"):
+            if item.lower().endswith((".jpg", ".png", ".gif")):
                 if "f-" in item:
                     current_variant["flag_icon"] = item
-                    country_match = re.search(r"f-([a-z]+)\.", item)
-                    if country_match:
-                        current_variant["country"] = country_match.group(1).upper()
+                    country = item.split("f-")[-1].split(".")[0]
+                    if country:
+                        current_variant["country"] = country.upper()
                 else:
                     current_variant["thumb_img"] = item
-                    key_match = re.search(r"([a-z0-9]+)-[0-9]\.", item)
-                    if key_match:
-                        current_variant["img_key"] = key_match.group(1)
+                    key = item.split("-")[0] if "-" in item else item.split(".")[0]
+                    if key:
+                        current_variant["img_key"] = key
             else:
                 current_variant["disc_title"] = item
                 sceds_in_item = SCED_PATTERN.findall(item)

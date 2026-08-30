@@ -2,12 +2,12 @@
 FastAPI Server for PlayStation Demo Collector (DEMOSCENE).
 Supports Docker containerization, Nginx reverse proxy, Cloudflare Tunnels, and local asset caching.
 """
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, Request
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, Depends, Security
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-import socket
 import os
 import json
 
@@ -18,16 +18,40 @@ from app.services import intel as game_intel
 from app.services import downloader as download_assets
 from app.services import boxart as boxart_service
 
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+def verify_admin_key(api_key: Optional[str] = Security(api_key_header)):
+    """
+    Verify admin API key for mutating/sensitive operations.
+    If ADMIN_API_KEY is not configured in settings, allows open access for local development.
+    """
+    configured_key = settings.ADMIN_API_KEY
+    if not configured_key:
+        return True
+    if not api_key or api_key.strip() != configured_key:
+        raise HTTPException(
+            status_code=401,
+            detail="Admin authentication required. Please configure a valid API Key."
+        )
+    return True
+
+
 app = FastAPI(
     title="DEMOSCENE",
     description="Track and archive PS1 & PS2 demo discs, disc scans, slipcases, and box art",
     version="2.0.0"
 )
 
+# Safe CORS policy
+origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+if not origins or "*" in origins:
+    origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=origins,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -64,13 +88,24 @@ class ImportPayload(BaseModel):
     collection: List[Dict[str, Any]]
 
 
+@app.get("/api/auth-status")
+def get_auth_status(api_key: Optional[str] = Security(api_key_header)):
+    """Check if admin key is configured and if provided key is valid."""
+    is_required = bool(settings.ADMIN_API_KEY)
+    is_authenticated = (not is_required) or (bool(api_key) and api_key.strip() == settings.ADMIN_API_KEY)
+    return {
+        "auth_required": is_required,
+        "authenticated": is_authenticated
+    }
+
+
 @app.get("/api/settings")
 def get_settings():
     """Get current configuration status for IGDB API."""
     return boxart_service.get_igdb_status()
 
 
-@app.post("/api/settings")
+@app.post("/api/settings", dependencies=[Depends(verify_admin_key)])
 def update_settings(payload: SettingsPayload):
     """Test and update IGDB API credentials, writing to .env."""
     res = boxart_service.save_igdb_credentials(
@@ -126,15 +161,16 @@ def get_demo_detail(demo_id: str):
     if not demo:
         raise HTTPException(status_code=404, detail="Demo disc not found")
     
-    # Enrich game categories with box art & intel links
+    # Enrich game categories from cache (instant, non-blocking)
     demo["enriched_categories"] = game_intel.enrich_demo_contents(
         demo.get("categories", {}),
-        console=demo.get("console", "PS2")
+        console=demo.get("console", "PS2"),
+        auto_fetch=False
     )
     return demo
 
 
-@app.post("/api/collection/bulk")
+@app.post("/api/collection/bulk", dependencies=[Depends(verify_admin_key)])
 def bulk_update_collection_status(payload: BulkCollectionUpdate):
     """Bulk update collection status, condition, and checklist attributes for multiple demos."""
     if not payload.demo_ids:
@@ -162,7 +198,7 @@ def bulk_update_collection_status(payload: BulkCollectionUpdate):
     return {"success": True, "updated_count": updated_count}
 
 
-@app.post("/api/collection/{demo_id}")
+@app.post("/api/collection/{demo_id}", dependencies=[Depends(verify_admin_key)])
 def update_collection_status(demo_id: str, payload: CollectionUpdate):
     """Update collection tracking state for a demo disc/variant."""
     demo = db.get_demo(demo_id)
@@ -230,28 +266,28 @@ def export_backup():
     return db.export_collection_data()
 
 
-@app.post("/api/import")
+@app.post("/api/import", dependencies=[Depends(verify_admin_key)])
 def import_backup(payload: ImportPayload):
     """Import and merge JSON backup collection records."""
     count = db.import_collection_data(payload.dict())
     return {"success": True, "imported_count": count}
 
 
-@app.post("/api/scrape")
+@app.post("/api/scrape", dependencies=[Depends(verify_admin_key)])
 def trigger_scrape(background_tasks: BackgroundTasks):
     """Trigger background scrape of crimson-ceremony.net/demopals."""
     background_tasks.add_task(scraper.run_scraper, verbose=True)
     return {"success": True, "message": "Scraper task queued."}
 
 
-@app.post("/api/assets/download-all")
+@app.post("/api/assets/download-all", dependencies=[Depends(verify_admin_key)])
 def trigger_assets_download(background_tasks: BackgroundTasks):
     """Trigger offline download and caching of all disc photos and sleeve scans."""
     background_tasks.add_task(download_assets.download_all_demopals_assets, max_workers=8, verbose=True)
     return {"success": True, "message": "Offline scans download queued in background."}
 
 
-@app.post("/api/boxart/fetch-all")
+@app.post("/api/boxart/fetch-all", dependencies=[Depends(verify_admin_key)])
 def trigger_boxart_fetch(background_tasks: BackgroundTasks, limit: int = 150):
     """Trigger batch resolution and download of game box art."""
     background_tasks.add_task(boxart_service.batch_fetch_boxart, limit=limit)
@@ -264,10 +300,5 @@ app.mount("/", StaticFiles(directory=settings.STATIC_DIR, html=True), name="stat
 
 if __name__ == "__main__":
     import uvicorn
-    print("\n" + "═" * 60)
-    print("DEMOSCENE - PlayStation Demo Collector Web App")
-    print("═" * 60)
-    print(f"Desktop: http://localhost:{settings.PORT}")
-    print("═" * 60 + "\n")
-    uvicorn.run("app.main:app", host=settings.HOST, port=settings.PORT, reload=True)
+    uvicorn.run("app.main:app", host=settings.HOST, port=settings.PORT, reload=False)
 

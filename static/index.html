@@ -41,7 +41,7 @@
         <!-- Primary Top Navigation Tabs -->
         <nav class="nav-tabs" id="mainNavTabs">
           <button class="nav-tab active" data-page="archive" id="navTabArchive">
-            Archive <span class="nav-badge" id="navCountArchive">872</span>
+            Archive <span class="nav-badge" id="navCountArchive">-</span>
           </button>
           <button class="nav-tab" data-page="collection" id="navTabCollection">
             My Collection <span class="nav-badge count-owned" id="navCountOwned">0</span>
@@ -252,7 +252,7 @@
                   <div class="stat-bar-fill fill-green" id="colStatBarTotal" style="width: 0%;"></div>
                 </div>
                 <div class="stat-bar-sub">
-                  <span id="colStatOwnedCount">0</span> of <span id="colStatTotalDemos">872</span> Discs Owned
+                  <span id="colStatOwnedCount">0</span> of <span id="colStatTotalDemos">-</span> Discs Owned
                 </div>
               </div>
 
@@ -260,7 +260,7 @@
               <div class="stat-progress-block mt-3">
                 <div class="stat-bar-header">
                   <span>PS1 Demos</span>
-                  <strong id="colStatPs1Summary">0 / 590 (0.0%)</strong>
+                  <strong id="colStatPs1Summary">0 / - (0.0%)</strong>
                 </div>
                 <div class="stat-bar">
                   <div class="stat-bar-fill fill-ps1" id="colStatBarPs1" style="width: 0%;"></div>
@@ -270,7 +270,7 @@
               <div class="stat-progress-block mt-2">
                 <div class="stat-bar-header">
                   <span>PS2 Demos</span>
-                  <strong id="colStatPs2Summary">0 / 282 (0.0%)</strong>
+                  <strong id="colStatPs2Summary">0 / - (0.0%)</strong>
                 </div>
                 <div class="stat-bar">
                   <div class="stat-bar-fill fill-ps2" id="colStatBarPs2" style="width: 0%;"></div>
@@ -363,7 +363,7 @@
               </div>
             </div>
             <div class="side-card-body">
-              <p class="settings-desc mb-2">All unique games contained across your owned demo discs:</p>
+              <p class="settings-desc mb-2">All unique playable games across your owned demo discs:</p>
               
               <div class="search-row mb-2">
                 <input 
@@ -536,6 +536,30 @@
               <button class="ps-btn ps-btn-dark" id="btnSyncScrape">Start Sync</button>
             </div>
             <div id="syncStatus" class="asset-status-text mt-1"></div>
+          </div>
+        </div>
+
+        <!-- CARD 5: Admin Security & Tunnel Access -->
+        <div class="settings-card">
+          <div class="settings-card-header">
+            <h3>Admin Security &amp; Access</h3>
+            <span id="authStatusBadge" class="status-badge-offline">Local Mode</span>
+          </div>
+          <div class="settings-card-body">
+            <p class="settings-desc">
+              When exposing DEMOSCENE over Cloudflare Tunnels or a public IP, set an <code>ADMIN_API_KEY</code> in your <code>.env</code> file. Enter that key here to authenticate your browser session.
+            </p>
+
+            <div class="form-group mt-3">
+              <label for="txtAdminApiKey">Admin API Key</label>
+              <input type="password" id="txtAdminApiKey" class="ps-input font-mono" placeholder="••••••••••••••••" spellcheck="false" />
+            </div>
+
+            <div id="authFeedback" class="form-feedback" style="display: none;"></div>
+
+            <div class="mt-3">
+              <button class="ps-btn ps-btn-dark" id="btnSaveAdminKey">Save API Key</button>
+            </div>
           </div>
         </div>
 

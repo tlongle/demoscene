@@ -1314,15 +1314,22 @@ body {
   border-color: var(--ps1-charcoal);
 }
 
+body.modal-open {
+  overflow: hidden !important;
+  touch-action: none;
+}
+
 .ps-modal-backdrop {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.65);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 2000;
   padding: 12px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .ps-modal {
@@ -1333,6 +1340,7 @@ body {
   display: flex;
   flex-direction: column;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  overscroll-behavior: contain;
 }
 
 .ps-modal-sm { max-width: 420px; }
@@ -1346,6 +1354,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .modal-title-wrap h2 {
@@ -1378,6 +1387,8 @@ body {
 .ps-modal-body {
   padding: 16px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .form-group {

@@ -44,6 +44,39 @@ function getShortRegionCode(countryStr, fallback = "") {
   return key.slice(0, 3).toUpperCase();
 }
 
+function escapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function escapeAttr(str) {
+  return escapeHtml(str);
+}
+
+async function apiFetch(url, options = {}) {
+  const apiKey = localStorage.getItem("demoscene_api_key") || "";
+  const opts = { ...options };
+  opts.headers = { ...(opts.headers || {}) };
+  if (apiKey) {
+    opts.headers["X-API-Key"] = apiKey;
+  }
+  const res = await fetch(url, opts);
+  if (res.status === 401) {
+    const entered = window.prompt("This action requires an Admin API Key. Please enter your API key to authenticate:", apiKey);
+    if (entered !== null && entered.trim() !== "") {
+      localStorage.setItem("demoscene_api_key", entered.trim());
+      opts.headers["X-API-Key"] = entered.trim();
+      return fetch(url, opts);
+    }
+  }
+  return res;
+}
+
 // Application State
 const state = {
   currentPage: "archive", // 'archive', 'collection', 'settings'
@@ -206,6 +239,10 @@ const elements = {
   importStatus: document.getElementById("importStatus"),
   btnSyncScrape: document.getElementById("btnSyncScrape"),
   syncStatus: document.getElementById("syncStatus"),
+  authStatusBadge: document.getElementById("authStatusBadge"),
+  txtAdminApiKey: document.getElementById("txtAdminApiKey"),
+  authFeedback: document.getElementById("authFeedback"),
+  btnSaveAdminKey: document.getElementById("btnSaveAdminKey"),
 
   // Modals
   detailModal: document.getElementById("detailModal"),
@@ -454,16 +491,16 @@ function createArchiveCard(demo) {
 
   card.innerHTML = `
     <div class="card-img-wrap">
-      <img src="${thumbUrl}" alt="${demo.title}" class="card-img" loading="lazy" />
+      <img src="${escapeAttr(thumbUrl)}" alt="${escapeAttr(demo.title)}" class="card-img" loading="lazy" />
       <div class="card-tag-strip">
-        <span class="tag-badge tag-${demo.console.toLowerCase()}">${demo.console}</span>
-        <span class="tag-badge">${demo.section_name}</span>
+        <span class="tag-badge tag-${escapeAttr((demo.console || '').toLowerCase())}">${escapeHtml(demo.console)}</span>
+        <span class="tag-badge">${escapeHtml(demo.section_name)}</span>
       </div>
     </div>
     <div class="card-info">
       ${flagsHtml ? `<div class="card-flags">${flagsHtml}</div>` : ""}
-      <div class="card-title" title="${demo.title}">${demo.title}</div>
-      <div class="card-sced">${scedText}</div>
+      <div class="card-title" title="${escapeAttr(demo.title)}">${escapeHtml(demo.title)}</div>
+      <div class="card-sced">${escapeHtml(scedText)}</div>
       <div class="card-footer">
         <div class="card-counts">
           ${countsHtml.join("")}
@@ -500,7 +537,7 @@ function createArchiveListRow(demo) {
     demo.variants.forEach(v => {
       if (v.flag_icon && !seen.has(v.flag_icon)) {
         seen.add(v.flag_icon);
-        flagImgs.push(`<img src="${v.flag_icon}" alt="${v.country || ''}" class="flag-mini" title="${v.country || ''}" />`);
+        flagImgs.push(`<img src="${escapeAttr(v.flag_icon)}" alt="${escapeAttr(v.country || '')}" class="flag-mini" title="${escapeAttr(v.country || '')}" />`);
       }
     });
     if (flagImgs.length > 0) {
@@ -523,13 +560,13 @@ function createArchiveListRow(demo) {
   if (demo.trailer_count > 0) countsHtml.push(`<span>${demo.trailer_count} Video</span>`);
 
   row.innerHTML = `
-    <img src="${thumbUrl}" alt="${demo.title}" class="pc-thumb" loading="lazy" />
+    <img src="${escapeAttr(thumbUrl)}" alt="${escapeAttr(demo.title)}" class="pc-thumb" loading="lazy" />
     <div class="pc-main">
-      <div class="pc-title" title="${demo.title}">${demo.title}</div>
+      <div class="pc-title" title="${escapeAttr(demo.title)}">${escapeHtml(demo.title)}</div>
       <div class="pc-sub">
-        <span class="tag-badge tag-${demo.console.toLowerCase()}">${demo.console}</span>
-        <span class="pc-sec-name">${demo.section_name}</span>
-        <span class="sced-mono">${scedText}</span>
+        <span class="tag-badge tag-${escapeAttr((demo.console || '').toLowerCase())}">${escapeHtml(demo.console)}</span>
+        <span class="pc-sec-name">${escapeHtml(demo.section_name)}</span>
+        <span class="sced-mono">${escapeHtml(scedText)}</span>
         ${flagsHtml}
       </div>
     </div>
@@ -835,15 +872,15 @@ function createPriceChartingListRow(demo) {
 
   row.innerHTML = `
     ${selectCell}
-    <img src="${thumbUrl}" alt="${demo.title}" class="pc-thumb" loading="lazy" />
+    <img src="${escapeAttr(thumbUrl)}" alt="${escapeAttr(demo.title)}" class="pc-thumb" loading="lazy" />
     <div class="pc-main">
-      <div class="pc-title" title="${demo.title}">${demo.title}</div>
+      <div class="pc-title" title="${escapeAttr(demo.title)}">${escapeHtml(demo.title)}</div>
       <div class="pc-sub">
-        <span class="tag-badge tag-${demo.console.toLowerCase()}">${demo.console}</span>
-        <span class="pc-sec-name">${demo.section_name}</span>
-        <span class="sced-mono">${scedText}</span>
+        <span class="tag-badge tag-${escapeAttr((demo.console || '').toLowerCase())}">${escapeHtml(demo.console)}</span>
+        <span class="pc-sec-name">${escapeHtml(demo.section_name)}</span>
+        <span class="sced-mono">${escapeHtml(scedText)}</span>
         ${flagsHtml}
-        ${demo.coll_notes ? `<span class="pc-note-snippet">"${demo.coll_notes}"</span>` : ""}
+        ${demo.coll_notes ? `<span class="pc-note-snippet">"${escapeHtml(demo.coll_notes)}"</span>` : ""}
       </div>
     </div>
     <div class="pc-counts">
@@ -917,7 +954,7 @@ function createCollectionCard(demo) {
     demo.variants.forEach(v => {
       if (v.flag_icon && !seen.has(v.flag_icon)) {
         seen.add(v.flag_icon);
-        flagImgs.push(`<img src="${v.flag_icon}" alt="${v.country || ''}" class="flag-mini" title="${v.country || ''}" />`);
+        flagImgs.push(`<img src="${escapeAttr(v.flag_icon)}" alt="${escapeAttr(v.country || '')}" class="flag-mini" title="${escapeAttr(v.country || '')}" />`);
       }
     });
     if (flagImgs.length > 0) {
@@ -964,15 +1001,15 @@ function createCollectionCard(demo) {
   card.innerHTML = `
     <div class="card-img-wrap">
       ${selectBox}
-      <img src="${thumbUrl}" alt="${demo.title}" class="card-img" loading="lazy" />
+      <img src="${escapeAttr(thumbUrl)}" alt="${escapeAttr(demo.title)}" class="card-img" loading="lazy" />
       <div class="card-tag-strip">
-        <span class="tag-badge tag-${demo.console.toLowerCase()}">${demo.console}</span>
-        <span class="tag-badge">${demo.section_name}</span>
+        <span class="tag-badge tag-${escapeAttr((demo.console || '').toLowerCase())}">${escapeHtml(demo.console)}</span>
+        <span class="tag-badge">${escapeHtml(demo.section_name)}</span>
       </div>
     </div>
     <div class="card-info">
-      <div class="card-title" title="${demo.title}">${demo.title}</div>
-      <div class="card-sced">${scedText} ${flagsHtml}</div>
+      <div class="card-title" title="${escapeAttr(demo.title)}">${escapeHtml(demo.title)}</div>
+      <div class="card-sced">${escapeHtml(scedText)} ${flagsHtml}</div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:4px;">
         ${condBadge}
         <div class="pc-checklist">
@@ -981,7 +1018,7 @@ function createCollectionCard(demo) {
           ${workingPill}
         </div>
       </div>
-      ${demo.coll_notes ? `<div class="pc-note-snippet mb-1" style="font-size:11px;color:#666;font-style:italic;margin-bottom:6px;">"${demo.coll_notes}"</div>` : ''}
+      ${demo.coll_notes ? `<div class="pc-note-snippet mb-1" style="font-size:11px;color:#666;font-style:italic;margin-bottom:6px;">"${escapeHtml(demo.coll_notes)}"</div>` : ''}
       <div class="card-footer">
         <div class="card-counts">
           ${countsHtml.join("")}
@@ -1048,7 +1085,7 @@ async function handleSaveSingleEdit() {
   };
 
   try {
-    const res = await fetch(`${API_BASE}/api/collection/${encodeURIComponent(state.editingDemoId)}`, {
+    const res = await apiFetch(`${API_BASE}/api/collection/${encodeURIComponent(state.editingDemoId)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -1069,7 +1106,7 @@ async function handleRemoveSingleFromCollection(demo) {
   if (!confirm(`Remove "${demo.title}" from your collection?`)) return;
 
   try {
-    const res = await fetch(`${API_BASE}/api/collection/${encodeURIComponent(demo.id)}`, {
+    const res = await apiFetch(`${API_BASE}/api/collection/${encodeURIComponent(demo.id)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "unowned" })
@@ -1164,7 +1201,7 @@ async function handleQuickCollectionBulkUpdate(actionType) {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/api/collection/bulk`, {
+    const res = await apiFetch(`${API_BASE}/api/collection/bulk`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -1192,7 +1229,7 @@ async function handleBulkRemoveCollection() {
   };
 
   try {
-    const res = await fetch(`${API_BASE}/api/collection/bulk`, {
+    const res = await apiFetch(`${API_BASE}/api/collection/bulk`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -1231,7 +1268,7 @@ async function handleApplyAdvancedBulkEdit() {
   if (notesVal) payload.notes = notesVal;
 
   try {
-    const res = await fetch(`${API_BASE}/api/collection/bulk`, {
+    const res = await apiFetch(`${API_BASE}/api/collection/bulk`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -1262,7 +1299,7 @@ async function loadStats() {
     const stats = await res.json();
     state.stats = stats;
 
-    const totalDemos = stats.total_demos || 872;
+    const totalDemos = stats.total_demos || 0;
     const ownedDemos = stats.owned_demos || 0;
     const completionRate = stats.completion_rate || 0;
 
@@ -1278,13 +1315,13 @@ async function loadStats() {
 
     // PS1 & PS2 Platform Bars
     const ps1Owned = stats.owned_ps1 || 0;
-    const ps1Total = stats.total_ps1 || 590;
+    const ps1Total = stats.total_ps1 || 0;
     const ps1Rate = ps1Total > 0 ? ((ps1Owned / ps1Total) * 100).toFixed(1) : 0;
     if (elements.colStatPs1Summary) elements.colStatPs1Summary.textContent = `${ps1Owned} / ${ps1Total} (${ps1Rate}%)`;
     if (elements.colStatBarPs1) elements.colStatBarPs1.style.width = `${Math.min(ps1Rate, 100)}%`;
 
     const ps2Owned = stats.owned_ps2 || 0;
-    const ps2Total = stats.total_ps2 || 282;
+    const ps2Total = stats.total_ps2 || 0;
     const ps2Rate = ps2Total > 0 ? ((ps2Owned / ps2Total) * 100).toFixed(1) : 0;
     if (elements.colStatPs2Summary) elements.colStatPs2Summary.textContent = `${ps2Owned} / ${ps2Total} (${ps2Rate}%)`;
     if (elements.colStatBarPs2) elements.colStatBarPs2.style.width = `${Math.min(ps2Rate, 100)}%`;
@@ -1305,10 +1342,10 @@ async function loadStats() {
     if (elements.colStatCondGood) elements.colStatCondGood.textContent = good;
     if (elements.colStatBarGood) elements.colStatBarGood.style.width = ownedDemos > 0 ? `${(good / safeOwned) * 100}%` : '0%';
 
-    // Packaging & Testing Checklist Bars
-    const withSleeve = c.with_sleeve || 0;
-    const inCase = c.in_case || 0;
-    const working = c.working || 0;
+    // Checklist Counts
+    const withSleeve = stats.with_sleeve || 0;
+    const inCase = stats.in_case || 0;
+    const working = stats.working || 0;
 
     if (elements.colStatWithSleeve) elements.colStatWithSleeve.textContent = withSleeve;
     if (elements.colStatBarWithSleeve) elements.colStatBarWithSleeve.style.width = ownedDemos > 0 ? `${(withSleeve / safeOwned) * 100}%` : '0%';
@@ -1327,7 +1364,7 @@ async function loadStats() {
           return `
             <div class="series-row-item">
               <div class="series-row-header">
-                <span>[${s.console}] ${s.section_name}</span>
+                <span>[${escapeHtml(s.console)}] ${escapeHtml(s.section_name)}</span>
                 <strong>${s.owned} / ${s.total} (${sRate}%)</strong>
               </div>
               <div class="stat-bar" style="height: 4px;">
@@ -1376,12 +1413,12 @@ function renderCollectionGamesList(games) {
 
   elements.collectionGamesList.innerHTML = games.map(g => {
     const thumbHtml = g.boxart_url
-      ? `<img src="${g.boxart_url}" alt="${g.name}" class="col-game-thumb" loading="lazy" />`
-      : `<div class="col-game-retro-badge">${g.initials || 'PS'}</div>`;
+      ? `<img src="${escapeAttr(g.boxart_url)}" alt="${escapeAttr(g.name)}" class="col-game-thumb" loading="lazy" />`
+      : `<div class="col-game-retro-badge">${escapeHtml(g.initials || 'PS')}</div>`;
 
     const demoPills = (g.found_in || []).map(d => `
-      <span class="col-game-demo-pill" data-demo-id="${d.demo_id}" title="Found on: ${d.demo_title} (${d.sced})">
-        ${d.demo_title}
+      <span class="col-game-demo-pill" data-demo-id="${escapeAttr(d.demo_id)}" title="Found on: ${escapeAttr(d.demo_title || '')} (${escapeAttr(d.sced || '')})">
+        ${escapeHtml(d.demo_title)}
       </span>
     `).join("");
 
@@ -1389,12 +1426,12 @@ function renderCollectionGamesList(games) {
       <div class="col-game-item">
         ${thumbHtml}
         <div class="col-game-info">
-          <div class="col-game-title" title="${g.name}">${g.name}</div>
+          <div class="col-game-title" title="${escapeAttr(g.name)}">${escapeHtml(g.name)}</div>
           <div class="col-game-meta">
-            <span class="tag-badge tag-${g.console.toLowerCase()}">${g.console}</span>
-            <span>${g.genre}</span>
-            <a href="${g.links.youtube}" target="_blank" rel="noopener" class="game-link-btn">Play</a>
-            <a href="${g.links.wikipedia}" target="_blank" rel="noopener" class="game-link-btn">Wiki</a>
+            <span class="tag-badge tag-${escapeAttr((g.console || '').toLowerCase())}">${escapeHtml(g.console)}</span>
+            <span>${escapeHtml(g.genre)}</span>
+            <a href="${escapeAttr(g.links.youtube)}" target="_blank" rel="noopener" class="game-link-btn">Play</a>
+            <a href="${escapeAttr(g.links.wikipedia)}" target="_blank" rel="noopener" class="game-link-btn">Wiki</a>
           </div>
           <div class="col-game-demos-pills">
             ${demoPills}
@@ -1420,7 +1457,7 @@ function renderCollectionGamesList(games) {
 async function quickToggleCollectionStatus(demo) {
   const nextStatus = demo.coll_status === "owned" ? "unowned" : "owned";
   try {
-    const res = await fetch(`${API_BASE}/api/collection/${encodeURIComponent(demo.id)}`, {
+    const res = await apiFetch(`${API_BASE}/api/collection/${encodeURIComponent(demo.id)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1454,6 +1491,9 @@ function setupSettingsListeners() {
   elements.btnImportJson.addEventListener("click", () => elements.importFileInput.click());
   elements.importFileInput.addEventListener("change", handleImportBackup);
   elements.btnSyncScrape.addEventListener("click", handleSyncScrape);
+  if (elements.btnSaveAdminKey) {
+    elements.btnSaveAdminKey.addEventListener("click", handleSaveAdminKey);
+  }
 }
 
 async function checkSettingsStatus() {
@@ -1472,6 +1512,47 @@ async function checkSettingsStatus() {
   } catch (err) {
     console.error("Could not check settings:", err);
   }
+  checkAuthStatus();
+}
+
+async function checkAuthStatus() {
+  try {
+    const res = await apiFetch(`${API_BASE}/api/auth-status`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (elements.authStatusBadge) {
+      if (data.auth_required) {
+        if (data.authenticated) {
+          elements.authStatusBadge.textContent = "Authenticated";
+          elements.authStatusBadge.className = "status-badge-online";
+        } else {
+          elements.authStatusBadge.textContent = "Key Required";
+          elements.authStatusBadge.className = "status-badge-offline";
+        }
+      } else {
+        elements.authStatusBadge.textContent = "Open (Local Mode)";
+        elements.authStatusBadge.className = "status-badge-online";
+      }
+    }
+    const currentKey = localStorage.getItem("demoscene_api_key") || "";
+    if (elements.txtAdminApiKey && currentKey) {
+      elements.txtAdminApiKey.value = currentKey;
+    }
+  } catch (err) {
+    console.error("Could not check auth status:", err);
+  }
+}
+
+async function handleSaveAdminKey() {
+  const keyVal = elements.txtAdminApiKey.value.trim();
+  if (keyVal) {
+    localStorage.setItem("demoscene_api_key", keyVal);
+    showFormFeedback(elements.authFeedback, "Admin API key saved to browser.", "success");
+  } else {
+    localStorage.removeItem("demoscene_api_key");
+    showFormFeedback(elements.authFeedback, "Admin API key cleared.", "info");
+  }
+  checkAuthStatus();
 }
 
 async function handleSaveSettings() {
@@ -1487,7 +1568,7 @@ async function handleSaveSettings() {
   elements.btnSaveSettings.disabled = true;
 
   try {
-    const res = await fetch(`${API_BASE}/api/settings`, {
+    const res = await apiFetch(`${API_BASE}/api/settings`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1515,7 +1596,7 @@ async function handleDownloadScans() {
   elements.btnDownloadScans.disabled = true;
   elements.scansDownloadStatus.textContent = "Scans download running in background...";
   try {
-    await fetch(`${API_BASE}/api/assets/download-all`, { method: "POST" });
+    await apiFetch(`${API_BASE}/api/assets/download-all`, { method: "POST" });
     elements.scansDownloadStatus.textContent = "Download queued! Scans are caching to volume in background.";
   } catch (err) {
     elements.scansDownloadStatus.textContent = "Failed to queue download.";
@@ -1526,7 +1607,7 @@ async function handleFetchBoxart() {
   elements.btnFetchBoxart.disabled = true;
   elements.boxartFetchStatus.textContent = "Cover fetch running in background...";
   try {
-    await fetch(`${API_BASE}/api/boxart/fetch-all`, { method: "POST" });
+    await apiFetch(`${API_BASE}/api/boxart/fetch-all`, { method: "POST" });
     elements.boxartFetchStatus.textContent = "Box art batch fetch queued!";
   } catch (err) {
     elements.boxartFetchStatus.textContent = "Failed to queue box art fetch.";
@@ -1557,7 +1638,7 @@ async function handleImportBackup(e) {
   reader.onload = async (evt) => {
     try {
       const data = JSON.parse(evt.target.result);
-      const res = await fetch(`${API_BASE}/api/import`, {
+      const res = await apiFetch(`${API_BASE}/api/import`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data)
@@ -1581,7 +1662,7 @@ async function handleSyncScrape() {
   elements.btnSyncScrape.disabled = true;
   elements.syncStatus.textContent = "Scraping archive sections...";
   try {
-    await fetch(`${API_BASE}/api/scrape`, { method: "POST" });
+    await apiFetch(`${API_BASE}/api/scrape`, { method: "POST" });
     elements.syncStatus.textContent = "Sync task queued. The database will update shortly.";
   } catch (err) {
     elements.syncStatus.textContent = `Error: ${err.message}`;
@@ -1674,8 +1755,8 @@ function renderDetailModalContent(demo) {
     scanThumbsHtml = `
       <div class="scans-thumbs mt-2">
         ${scans.map((s, idx) => `
-          <button class="scan-thumb-btn ${idx === 0 ? 'active' : ''}" data-scan-idx="${idx}" title="${s.label}">
-            <img src="${s.local_url || s.remote_url}" alt="${s.label}" />
+          <button class="scan-thumb-btn ${idx === 0 ? 'active' : ''}" data-scan-idx="${idx}" title="${escapeAttr(s.label || '')}">
+            <img src="${escapeAttr(s.local_url || s.remote_url)}" alt="${escapeAttr(s.label || '')}" />
           </button>
         `).join("")}
       </div>
@@ -1690,11 +1771,11 @@ function renderDetailModalContent(demo) {
         <div class="variant-pills-wrap">
           ${demo.variants.map((v, idx) => {
             const code = getShortRegionCode(v.country, v.sced ? v.sced.split("-")[0] : `R${idx + 1}`);
-            const flagHtml = v.flag_icon ? `<img src="${v.flag_icon}" alt="" class="flag-mini" />` : "";
+            const flagHtml = v.flag_icon ? `<img src="${escapeAttr(v.flag_icon)}" alt="" class="flag-mini" />` : "";
             const titleTooltip = `${v.country || 'Release'}${v.sced ? ` (${v.sced})` : ''}`;
             return `
-              <button class="btn-variant-pill ${idx === state.activeVariantIndex ? 'active' : ''}" data-variant-idx="${idx}" title="${titleTooltip}">
-                ${flagHtml} ${code}
+              <button class="btn-variant-pill ${idx === state.activeVariantIndex ? 'active' : ''}" data-variant-idx="${idx}" title="${escapeAttr(titleTooltip)}">
+                ${flagHtml} ${escapeHtml(code)}
               </button>
             `;
           }).join("")}
@@ -1712,21 +1793,21 @@ function renderDetailModalContent(demo) {
   for (const [catName, gameList] of Object.entries(cats)) {
     gamesHtml += `
       <div class="game-category-block">
-        <h4 class="game-category-title">${catName} (${gameList.length})</h4>
+        <h4 class="game-category-title">${escapeHtml(catName)} (${gameList.length})</h4>
         <div class="games-list">
           ${gameList.map(g => `
             <div class="game-item-card">
               ${g.boxart_url ? `
-                <img src="${g.boxart_url}" alt="${g.name}" class="game-boxart-thumb" loading="lazy" />
+                <img src="${escapeAttr(g.boxart_url)}" alt="${escapeAttr(g.name)}" class="game-boxart-thumb" loading="lazy" />
               ` : `
-                <div class="game-retro-badge">${g.initials || 'PS'}</div>
+                <div class="game-retro-badge">${escapeHtml(g.initials || 'PS')}</div>
               `}
               <div class="game-meta">
-                <div class="game-title" title="${g.name}">${g.name}</div>
-                <div class="game-genre">${g.genre}</div>
+                <div class="game-title" title="${escapeAttr(g.name)}">${escapeHtml(g.name)}</div>
+                <div class="game-genre">${escapeHtml(g.genre)}</div>
                 <div class="game-links">
-                  <a href="${g.links.youtube}" target="_blank" rel="noopener" class="game-link-btn">YouTube</a>
-                  <a href="${g.links.wikipedia}" target="_blank" rel="noopener" class="game-link-btn">Wiki</a>
+                  <a href="${escapeAttr(g.links.youtube)}" target="_blank" rel="noopener" class="game-link-btn">YouTube</a>
+                  <a href="${escapeAttr(g.links.wikipedia)}" target="_blank" rel="noopener" class="game-link-btn">Wiki</a>
                 </div>
               </div>
             </div>
@@ -1742,7 +1823,7 @@ function renderDetailModalContent(demo) {
         ${variantTabsHtml}
         <div class="scans-section">
           <div class="scans-main-view" id="mainScanView">
-            <img id="detailMainImage" src="${mainScanUrl}" alt="${demo.title}" />
+            <img id="detailMainImage" src="${escapeAttr(mainScanUrl)}" alt="${escapeAttr(demo.title)}" />
           </div>
           ${scanThumbsHtml}
         </div>
@@ -1788,7 +1869,7 @@ function renderDetailModalContent(demo) {
 
           <div class="form-group">
             <label>Notes</label>
-            <input type="text" id="modalTxtNotes" class="ps-input" value="${coll.notes || ''}" placeholder="e.g. Boot sale find" />
+            <input type="text" id="modalTxtNotes" class="ps-input" value="${escapeAttr(coll.notes || '')}" placeholder="e.g. Boot sale find" />
           </div>
 
           <button class="ps-btn ps-btn-sm ps-btn-dark mt-2" id="btnSaveModalCollection">Save Ledger Entry</button>
@@ -1798,7 +1879,7 @@ function renderDetailModalContent(demo) {
       <div class="detail-right">
         ${demo.notes ? `
           <div class="demo-notes-box mb-3" style="background:#f5f5f5;padding:8px 10px;border-left:3px solid #333;font-size:12px;margin-bottom:12px;">
-            <strong>Archive Notes:</strong> ${demo.notes}
+            <strong>Archive Notes:</strong> ${escapeHtml(demo.notes)}
           </div>
         ` : ''}
         ${gamesHtml || '<p class="text-muted">No games catalogued for this demo.</p>'}
@@ -1871,7 +1952,7 @@ async function saveModalCollectionState(demo, overrideStatus = null) {
   };
 
   try {
-    const res = await fetch(`${API_BASE}/api/collection/${encodeURIComponent(demo.id)}`, {
+    const res = await apiFetch(`${API_BASE}/api/collection/${encodeURIComponent(demo.id)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -1900,14 +1981,26 @@ function openZoomModal(imgUrl, captionText) {
 
 function openModal(modal) {
   modal.style.display = "flex";
+  document.body.classList.add("modal-open");
 }
 
 function closeModal(modal) {
   modal.style.display = "none";
+  checkBodyScrollLock();
 }
 
 function closeAllModals() {
   document.querySelectorAll(".ps-modal-backdrop").forEach(m => m.style.display = "none");
+  checkBodyScrollLock();
+}
+
+function checkBodyScrollLock() {
+  const anyOpen = Array.from(document.querySelectorAll(".ps-modal-backdrop")).some(
+    m => m.style.display === "flex"
+  );
+  if (!anyOpen) {
+    document.body.classList.remove("modal-open");
+  }
 }
 
 function showFormFeedback(el, msg, type = "success") {

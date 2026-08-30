@@ -14,7 +14,7 @@ from typing import List, Dict, Any, Optional
 
 from app.core.config import settings
 from app.core.database import save_demos_bulk, get_stats
-from app.services.parser import parse_block, SCED_PATTERN
+from app.services.parser import parse_block
 
 BASE_URL = "https://crimson-ceremony.net/demopals/"
 

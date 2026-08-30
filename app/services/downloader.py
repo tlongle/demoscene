@@ -14,6 +14,8 @@ from concurrent.futures import ThreadPoolExecutor
 from app.core.config import settings
 from app.core.database import get_db_connection
 
+from pathlib import Path, PurePosixPath
+
 SESSION = requests.Session()
 SESSION.headers.update({
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) PlayStationDemoCollector/2.0"
@@ -29,28 +31,22 @@ def download_single_image(remote_url: str) -> Optional[str]:
         return None
 
     try:
-        parsed = urlparse(remote_url)
-        path_parts = parsed.path.strip("/").split("/")
-        if "demopals" in path_parts:
-            idx = path_parts.index("demopals")
-            rel_parts = path_parts[idx + 1:]
-        else:
-            rel_parts = path_parts[-2:] if len(path_parts) >= 2 else path_parts
-
+        parts = PurePosixPath(urlparse(remote_url).path).parts
+        rel_parts = parts[parts.index("demopals") + 1:] if "demopals" in parts else parts[-2:]
         if not rel_parts:
             return None
 
-        local_file_path = os.path.join(settings.DEMOPALS_ASSETS_DIR, *rel_parts)
-        os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+        rel_path = "/".join(rel_parts)
+        local_file = Path(settings.DEMOPALS_ASSETS_DIR) / rel_path
+        local_file.parent.mkdir(parents=True, exist_ok=True)
 
-        if os.path.exists(local_file_path) and os.path.getsize(local_file_path) > 500:
-            return f"/assets/demopals/{'/'.join(rel_parts)}"
+        if local_file.exists() and local_file.stat().st_size > 500:
+            return f"/assets/demopals/{rel_path}"
 
         res = SESSION.get(remote_url, timeout=15)
         if res.status_code == 200 and len(res.content) > 500:
-            with open(local_file_path, "wb") as f:
-                f.write(res.content)
-            return f"/assets/demopals/{'/'.join(rel_parts)}"
+            local_file.write_bytes(res.content)
+            return f"/assets/demopals/{rel_path}"
     except Exception as e:
         print(f"⚠️ Error downloading {remote_url}: {e}")
     return None

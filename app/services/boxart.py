@@ -149,38 +149,47 @@ def get_cached_boxart_path(game_name: str, console: str = "PS2") -> Optional[str
     """Check if box art exists in SQLite or locally on disk."""
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT cover_url FROM game_covers WHERE game_name = ?", (game_name,))
+    cur.execute("SELECT cover_url FROM game_covers WHERE console = ? AND game_name = ?", (console, game_name))
     row = cur.fetchone()
     conn.close()
 
     if row and row[0]:
-        local_path = row[0]
-        if os.path.exists(local_path.lstrip("/")):
-            return local_path
+        cover_path = row[0]
+        if cover_path.startswith("http://") or cover_path.startswith("https://"):
+            return cover_path
+        if cover_path.startswith("/assets/"):
+            rel_path = cover_path[len("/assets/"):]
+            disk_file = os.path.join(settings.ASSETS_DIR, rel_path)
+            if os.path.exists(disk_file):
+                return cover_path
+            return cover_path
+        if os.path.exists(cover_path.lstrip("/")):
+            return cover_path
+        return cover_path
 
     slug = sanitize_filename(f"{console}_{game_name}")
     for ext in [".jpg", ".png", ".webp"]:
         candidate = os.path.join(settings.BOXART_ASSETS_DIR, f"{slug}{ext}")
         if os.path.exists(candidate):
             url_path = f"/assets/boxart/{slug}{ext}"
-            record_boxart(game_name, url_path, "disk")
+            record_boxart(game_name, url_path, "disk", console=console)
             return url_path
 
     return None
 
 
-def record_boxart(game_name: str, cover_url: str, source: str = "igdb") -> None:
-    """Record box art URL into SQLite."""
+def record_boxart(game_name: str, cover_url: str, source: str = "igdb", console: str = "PS2") -> None:
+    """Record box art URL into SQLite with composite (console, game_name) key."""
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("""
-    INSERT INTO game_covers (game_name, cover_url, source, updated_at)
-    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(game_name) DO UPDATE SET
+    INSERT INTO game_covers (console, game_name, cover_url, source, updated_at)
+    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(console, game_name) DO UPDATE SET
         cover_url=excluded.cover_url,
         source=excluded.source,
         updated_at=CURRENT_TIMESTAMP
-    """, (game_name, cover_url, source))
+    """, (console, game_name, cover_url, source))
     conn.commit()
     conn.close()
 
@@ -212,7 +221,7 @@ def download_and_save_boxart(image_url: str, game_name: str, console: str = "PS2
             f.write(res.content)
 
         web_path = f"/assets/boxart/{file_name}"
-        record_boxart(game_name, web_path, "igdb")
+        record_boxart(game_name, web_path, "igdb", console=console)
         return web_path
     except Exception:
         return None
@@ -248,23 +257,23 @@ def fetch_igdb_boxart(game_name: str, console: str = "PS2") -> Optional[str]:
             if data and len(data) > 0 and data[0].get("cover"):
                 img_id = data[0]["cover"].get("image_id")
                 if img_id:
-                    igdb_url = f"https://images.igdb.com/igdb/image/upload/t_cover_big/{img_id}.jpg"
-                    return download_and_save_boxart(igdb_url, game_name, console)
+                    high_res_url = f"https://images.igdb.com/igdb/image/upload/t_cover_big/{img_id}.jpg"
+                    return download_and_save_boxart(high_res_url, game_name, console)
 
-        # Query 2: General search fallback if platform targeted yielded nothing
-        query_general = f"""
+        # Query 2: Broad search if platform query returned empty
+        query_broad = f"""
         fields name, cover.image_id, cover.url;
         search "{clean_name}";
         limit 1;
         """
-        res2 = requests.post(url, headers=headers, data=query_general, timeout=8)
-        if res2.status_code == 200:
-            data2 = res2.json()
-            if data2 and len(data2) > 0 and data2[0].get("cover"):
-                img_id = data2[0]["cover"].get("image_id")
+        res_broad = requests.post(url, headers=headers, data=query_broad, timeout=8)
+        if res_broad.status_code == 200:
+            data_broad = res_broad.json()
+            if data_broad and len(data_broad) > 0 and data_broad[0].get("cover"):
+                img_id = data_broad[0]["cover"].get("image_id")
                 if img_id:
-                    igdb_url = f"https://images.igdb.com/igdb/image/upload/t_cover_big/{img_id}.jpg"
-                    return download_and_save_boxart(igdb_url, game_name, console)
+                    high_res_url = f"https://images.igdb.com/igdb/image/upload/t_cover_big/{img_id}.jpg"
+                    return download_and_save_boxart(high_res_url, game_name, console)
     except Exception:
         pass
 
@@ -273,16 +282,17 @@ def fetch_igdb_boxart(game_name: str, console: str = "PS2") -> Optional[str]:
 
 def resolve_game_boxart(game_name: str, console: str = "PS2", auto_fetch: bool = True) -> Dict[str, Any]:
     """
-    Resolve box art for a game title.
-    Checks local cache first. If not cached, queries IGDB (if configured).
-    If no IGDB credentials exist or game not found, returns retro badge placeholder.
+    Resolve box art for a specific game name:
+    1. Check SQLite/local disk cache
+    2. Query IGDB (if auto_fetch is True and API configured)
+    3. Return fallback retro badge
     """
     if is_non_game_media(game_name):
         return {
-            "type": "media_extra",
+            "type": "non_game",
             "is_game": False,
             "cover_url": None,
-            "label": "PlayStation Media"
+            "source": "skip"
         }
 
     # 1. Check local cache
@@ -319,9 +329,15 @@ def batch_fetch_boxart(limit: int = 150, console: Optional[str] = None) -> Dict[
     """Pre-fetch and download box art for games via IGDB."""
     conn = get_db_connection()
     cur = conn.cursor()
-    where = f"WHERE console = '{console}'" if console else ""
-    cur.execute(f"SELECT contents_json, console FROM demos {where}")
+    if console and console.upper() != "ALL":
+        cur.execute("SELECT contents_json, console FROM demos WHERE console = ?", (console.upper(),))
+    else:
+        cur.execute("SELECT contents_json, console FROM demos")
     rows = cur.fetchall()
+
+    # Pre-fetch all cached covers in 1 query to eliminate N+1 DB calls
+    cur.execute("SELECT console, game_name, cover_url FROM game_covers")
+    cached_lookup = {(r[0], r[1]): r[2] for r in cur.fetchall()}
     conn.close()
 
     unique_games = []
@@ -330,15 +346,17 @@ def batch_fetch_boxart(limit: int = 150, console: Optional[str] = None) -> Dict[
         contents = json.loads(row[0] or "{}")
         cons = row[1]
         for cat, games in contents.items():
+            if not cat.strip().lower().startswith("playable") and cat.strip().lower() != "net yaroze":
+                continue
             for g in games:
-                if not is_non_game_media(g) and g not in seen:
-                    seen.add(g)
+                if not is_non_game_media(g) and (g, cons) not in seen:
+                    seen.add((g, cons))
                     unique_games.append((g, cons))
 
     fetched = 0
     cached = 0
     for game_name, cons in unique_games[:limit]:
-        if get_cached_boxart_path(game_name, cons):
+        if (cons, game_name) in cached_lookup:
             cached += 1
             continue
 
