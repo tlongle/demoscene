@@ -130,3 +130,33 @@ def test_genre_detection_and_intel():
     assert "youtube" in intel["links"]
     assert "wikipedia" in intel["links"]
 
+
+def test_download_demo_assets_with_none_flag_and_path_resolution():
+    """Verify downloader handles None flag_icon and parses relative URLs safely without root write errors."""
+    from app.services.downloader import download_demo_assets, download_single_image
+
+    sample_demo = {
+        "id": "test_demo_id",
+        "title": "Test Demo",
+        "section_url": "https://crimson-ceremony.net/demopals/eurodemo/index.php",
+        "primary_thumbnail": "",
+        "variants": [
+            {
+                "country": "Germany",
+                "flag_icon": None,  # Should not raise AttributeError
+                "img_key": "ger199608"
+            },
+            {
+                "country": "UK",
+                "flag_icon": "https://crimson-ceremony.net/f-uk.jpg",
+                "img_key": "uk001"
+            }
+        ]
+    }
+
+    # Should run without crashing or PermissionError
+    res = download_demo_assets(sample_demo)
+    assert res["id"] == "test_demo_id"
+    assert len(res["variants"]) == 2
+
+

@@ -120,8 +120,31 @@ def init_db(db_path: str = None) -> None:
             game_idx = " | ".join(cats.get("Playable", [])).lower()
             cur.execute("UPDATE demos SET contents_json = ?, game_names_index = ? WHERE id = ?", (cats_json, game_idx, d_id))
 
+    # Normalize any remote crimson-ceremony thumbnail URLs to local asset paths
+    cur.execute("""
+    UPDATE demos 
+    SET primary_thumbnail = REPLACE(primary_thumbnail, 'https://crimson-ceremony.net/demopals/', '/assets/demopals/')
+    WHERE primary_thumbnail LIKE 'https://crimson-ceremony.net/demopals/%'
+    """)
+    cur.execute("""
+    UPDATE demos 
+    SET primary_thumbnail = REPLACE(primary_thumbnail, 'http://crimson-ceremony.net/demopals/', '/assets/demopals/')
+    WHERE primary_thumbnail LIKE 'http://crimson-ceremony.net/demopals/%'
+    """)
+
     conn.commit()
     conn.close()
+
+
+def normalize_asset_url(url: Optional[str]) -> Optional[str]:
+    """Convert remote Crimson Ceremony URLs to local /assets/demopals/ paths."""
+    if not url or not isinstance(url, str):
+        return url
+    if "crimson-ceremony.net/demopals/" in url:
+        return "/assets/demopals/" + url.split("demopals/", 1)[1]
+    if "crimson-ceremony.net/f-" in url:
+        return "/assets/demopals/" + url.split("crimson-ceremony.net/", 1)[1]
+    return url
 
 
 def ensure_demo_categories(demo_title: str, categories: Dict[str, List[str]], section_name: str = "") -> Dict[str, List[str]]:
@@ -447,10 +470,17 @@ def search_demos(
         item["sced_codes"] = json.loads(item["sced_codes_json"] or "[]")
         raw_cats = json.loads(item["contents_json"] or "{}")
         item["categories"] = ensure_demo_categories(item["title"], raw_cats, item.get("section_name", ""))
-        item["variants"] = json.loads(item["variants_json"] or "[]")
+        variants = json.loads(item["variants_json"] or "[]")
+        for v in variants:
+            if v.get("flag_icon"):
+                v["flag_icon"] = normalize_asset_url(v["flag_icon"])
+            if v.get("thumb_img"):
+                v["thumb_img"] = normalize_asset_url(v["thumb_img"])
+        item["variants"] = variants
         item["playable_count"] = len(item["categories"].get("Playable", []))
         item["trailer_count"] = len(item["categories"].get("Trailer", []))
         item["total_items"] = sum(len(v) for v in item["categories"].values())
+        item["primary_thumbnail"] = normalize_asset_url(item.get("primary_thumbnail"))
         if not item.get("primary_thumbnail") and item["variants"]:
             item["primary_thumbnail"] = item["variants"][0].get("thumb_img") or "/assets/demopals/f-eur.jpg"
         results.append(item)

@@ -27,16 +27,23 @@ def download_single_image(remote_url: str) -> Optional[str]:
     Download a single remote image into settings.DEMOPALS_ASSETS_DIR preserving its relative path structure.
     Returns the local web path (e.g., /assets/demopals/ops2meur/fra001-0.jpg).
     """
-    if not remote_url or not remote_url.startswith("http"):
+    if not remote_url or not isinstance(remote_url, str) or not remote_url.startswith("http"):
         return None
 
     try:
-        parts = PurePosixPath(urlparse(remote_url).path).parts
-        rel_parts = parts[parts.index("demopals") + 1:] if "demopals" in parts else parts[-2:]
-        if not rel_parts:
+        parsed = urlparse(remote_url)
+        path_str = parsed.path.lstrip("/")
+
+        # If the path contains 'demopals/', strip the leading part to keep it inside data/assets/demopals
+        if "demopals/" in path_str:
+            rel_path = path_str.split("demopals/", 1)[1]
+        else:
+            rel_path = path_str
+
+        rel_path = rel_path.strip("/")
+        if not rel_path:
             return None
 
-        rel_path = "/".join(rel_parts)
         local_file = Path(settings.DEMOPALS_ASSETS_DIR) / rel_path
         local_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -60,9 +67,11 @@ def probe_and_download_scans(base_section_url: str, img_key: str, max_scans: int
       - Scan 2 (-2.jpg): Disc Scan / Inlay
       - Scan 3 (-3.jpg): Slipcase / Cover Back
       - Scan 4 (-4.jpg): Inlay / Booklet Scan
+      - Scan 5 (-5.jpg): Alternate Scan #5
+      - Scan 6 (-6.jpg): Alternate Scan #6
       - Scan 0 (-0.jpg): Overview Thumbnail (Low-Res)
     """
-    if not img_key:
+    if not img_key or not base_section_url:
         return []
 
     base_dir_url = base_section_url if base_section_url.endswith("/") else base_section_url.rsplit("/", 1)[0] + "/"
@@ -99,20 +108,26 @@ def download_demo_assets(demo: Dict[str, Any], verbose: bool = False) -> Dict[st
     best_primary_thumbnail = demo.get("primary_thumbnail")
 
     for v in variants:
-        if v.get("flag_icon", "").startswith("http"):
-            local_flag = download_single_image(v["flag_icon"])
+        flag_icon = v.get("flag_icon")
+        if flag_icon and isinstance(flag_icon, str) and flag_icon.startswith("http"):
+            local_flag = download_single_image(flag_icon)
             if local_flag:
                 v["flag_icon"] = local_flag
 
-        found_scans = probe_and_download_scans(section_url, v.get("img_key"))
-        if found_scans:
-            v["scans"] = found_scans
-            front = next((s["local_url"] for s in found_scans if s["type"] == "cover_front"), None)
-            if not best_primary_thumbnail or "-0.jpg" in best_primary_thumbnail or best_primary_thumbnail.startswith("http"):
-                best_primary_thumbnail = front or found_scans[0]["local_url"]
+        img_key = v.get("img_key")
+        if img_key:
+            found_scans = probe_and_download_scans(section_url, img_key)
+            if found_scans:
+                v["scans"] = found_scans
+                front = next((s["local_url"] for s in found_scans if s["type"] == "cover_front"), None)
+                disc = next((s["local_url"] for s in found_scans if s["type"] == "disc_scan"), None)
+                chosen = front or disc or found_scans[0]["local_url"]
+                if not best_primary_thumbnail or "-0.jpg" in str(best_primary_thumbnail) or str(best_primary_thumbnail).startswith("http"):
+                    best_primary_thumbnail = chosen
 
     demo["variants"] = variants
-    demo["primary_thumbnail"] = best_primary_thumbnail
+    if best_primary_thumbnail:
+        demo["primary_thumbnail"] = best_primary_thumbnail
     return demo
 
 

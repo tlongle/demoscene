@@ -44,6 +44,17 @@ function getShortRegionCode(countryStr, fallback = "") {
   return key.slice(0, 3).toUpperCase();
 }
 
+function resolveAssetUrl(url) {
+  if (!url || typeof url !== "string") return "/assets/demopals/f-eur.jpg";
+  if (url.includes("crimson-ceremony.net/demopals/")) {
+    return "/assets/demopals/" + url.split("demopals/")[1];
+  }
+  if (url.includes("crimson-ceremony.net/f-")) {
+    return "/assets/demopals/" + url.split("crimson-ceremony.net/")[1];
+  }
+  return url;
+}
+
 function escapeHtml(str) {
   if (str === null || str === undefined) return "";
   return String(str)
@@ -461,18 +472,22 @@ function createArchiveCard(demo) {
   card.className = "ps-card";
   card.setAttribute("data-id", demo.id);
 
-  const thumbUrl = demo.primary_thumbnail || "/assets/demopals/f-eur.jpg";
+  const thumbUrl = resolveAssetUrl(demo.primary_thumbnail);
   const scedText = demo.sced_codes && demo.sced_codes.length > 0 ? demo.sced_codes.join(", ") : (demo.catalog_line || "");
 
   let flagsHtml = "";
   if (demo.variants && demo.variants.length > 0) {
     const seen = new Set();
+    const flagImgs = [];
     demo.variants.forEach(v => {
       if (v.flag_icon && !seen.has(v.flag_icon)) {
         seen.add(v.flag_icon);
-        flagsHtml += `<img src="${v.flag_icon}" alt="" class="flag-mini" />`;
+        flagImgs.push(`<img src="${escapeAttr(resolveAssetUrl(v.flag_icon))}" alt="${escapeAttr(v.country || '')}" class="flag-mini" title="${escapeAttr(v.country || '')}" onerror="this.style.display='none';" />`);
       }
     });
+    if (flagImgs.length > 0) {
+      flagsHtml = flagImgs.join("");
+    }
   }
 
   let trackClass = "";
@@ -491,7 +506,7 @@ function createArchiveCard(demo) {
 
   card.innerHTML = `
     <div class="card-img-wrap">
-      <img src="${escapeAttr(thumbUrl)}" alt="${escapeAttr(demo.title)}" class="card-img" loading="lazy" />
+      <img src="${escapeAttr(thumbUrl)}" alt="${escapeAttr(demo.title)}" class="card-img" loading="lazy" onerror="this.onerror=null;this.src='/assets/demopals/f-eur.jpg';" />
       <div class="card-tag-strip">
         <span class="tag-badge tag-${escapeAttr((demo.console || '').toLowerCase())}">${escapeHtml(demo.console)}</span>
         <span class="tag-badge">${escapeHtml(demo.section_name)}</span>
@@ -527,7 +542,7 @@ function createArchiveListRow(demo) {
   row.className = "pc-row";
   row.setAttribute("data-id", demo.id);
 
-  const thumbUrl = demo.primary_thumbnail || "/assets/demopals/f-eur.jpg";
+  const thumbUrl = resolveAssetUrl(demo.primary_thumbnail);
   const scedText = demo.sced_codes && demo.sced_codes.length > 0 ? demo.sced_codes.join(", ") : (demo.catalog_line || "");
 
   let flagsHtml = "";
@@ -537,7 +552,7 @@ function createArchiveListRow(demo) {
     demo.variants.forEach(v => {
       if (v.flag_icon && !seen.has(v.flag_icon)) {
         seen.add(v.flag_icon);
-        flagImgs.push(`<img src="${escapeAttr(v.flag_icon)}" alt="${escapeAttr(v.country || '')}" class="flag-mini" title="${escapeAttr(v.country || '')}" />`);
+        flagImgs.push(`<img src="${escapeAttr(resolveAssetUrl(v.flag_icon))}" alt="${escapeAttr(v.country || '')}" class="flag-mini" title="${escapeAttr(v.country || '')}" onerror="this.style.display='none';" />`);
       }
     });
     if (flagImgs.length > 0) {
@@ -560,7 +575,7 @@ function createArchiveListRow(demo) {
   if (demo.trailer_count > 0) countsHtml.push(`<span>${demo.trailer_count} Video</span>`);
 
   row.innerHTML = `
-    <img src="${escapeAttr(thumbUrl)}" alt="${escapeAttr(demo.title)}" class="pc-thumb" loading="lazy" />
+    <img src="${escapeAttr(thumbUrl)}" alt="${escapeAttr(demo.title)}" class="pc-thumb" loading="lazy" onerror="this.onerror=null;this.src='/assets/demopals/f-eur.jpg';" />
     <div class="pc-main">
       <div class="pc-title" title="${escapeAttr(demo.title)}">${escapeHtml(demo.title)}</div>
       <div class="pc-sub">
@@ -814,7 +829,7 @@ function createPriceChartingListRow(demo) {
     row.classList.add("is-selected");
   }
 
-  const thumbUrl = demo.primary_thumbnail || "/assets/demopals/f-eur.jpg";
+  const thumbUrl = resolveAssetUrl(demo.primary_thumbnail);
   const scedText = demo.sced_codes && demo.sced_codes.length > 0 ? demo.sced_codes.join(", ") : (demo.catalog_line || "");
 
   // Region Flags
@@ -825,7 +840,7 @@ function createPriceChartingListRow(demo) {
     demo.variants.forEach(v => {
       if (v.flag_icon && !seen.has(v.flag_icon)) {
         seen.add(v.flag_icon);
-        flagImgs.push(`<img src="${v.flag_icon}" alt="${v.country || ''}" class="flag-mini" title="${v.country || ''}" />`);
+        flagImgs.push(`<img src="${escapeAttr(resolveAssetUrl(v.flag_icon))}" alt="${escapeAttr(v.country || '')}" class="flag-mini" title="${escapeAttr(v.country || '')}" onerror="this.style.display='none';" />`);
       }
     });
     if (flagImgs.length > 0) {
@@ -872,7 +887,7 @@ function createPriceChartingListRow(demo) {
 
   row.innerHTML = `
     ${selectCell}
-    <img src="${escapeAttr(thumbUrl)}" alt="${escapeAttr(demo.title)}" class="pc-thumb" loading="lazy" />
+    <img src="${escapeAttr(thumbUrl)}" alt="${escapeAttr(demo.title)}" class="pc-thumb" loading="lazy" onerror="this.onerror=null;this.src='/assets/demopals/f-eur.jpg';" />
     <div class="pc-main">
       <div class="pc-title" title="${escapeAttr(demo.title)}">${escapeHtml(demo.title)}</div>
       <div class="pc-sub">
@@ -943,7 +958,7 @@ function createCollectionCard(demo) {
     card.classList.add("is-selected");
   }
 
-  const thumbUrl = demo.primary_thumbnail || "/assets/demopals/f-eur.jpg";
+  const thumbUrl = resolveAssetUrl(demo.primary_thumbnail);
   const scedText = demo.sced_codes && demo.sced_codes.length > 0 ? demo.sced_codes.join(", ") : (demo.catalog_line || "");
 
   // Region Flags
@@ -954,7 +969,7 @@ function createCollectionCard(demo) {
     demo.variants.forEach(v => {
       if (v.flag_icon && !seen.has(v.flag_icon)) {
         seen.add(v.flag_icon);
-        flagImgs.push(`<img src="${escapeAttr(v.flag_icon)}" alt="${escapeAttr(v.country || '')}" class="flag-mini" title="${escapeAttr(v.country || '')}" />`);
+        flagImgs.push(`<img src="${escapeAttr(resolveAssetUrl(v.flag_icon))}" alt="${escapeAttr(v.country || '')}" class="flag-mini" title="${escapeAttr(v.country || '')}" onerror="this.style.display='none';" />`);
       }
     });
     if (flagImgs.length > 0) {
@@ -1001,7 +1016,7 @@ function createCollectionCard(demo) {
   card.innerHTML = `
     <div class="card-img-wrap">
       ${selectBox}
-      <img src="${escapeAttr(thumbUrl)}" alt="${escapeAttr(demo.title)}" class="card-img" loading="lazy" />
+      <img src="${escapeAttr(thumbUrl)}" alt="${escapeAttr(demo.title)}" class="card-img" loading="lazy" onerror="this.onerror=null;this.src='/assets/demopals/f-eur.jpg';" />
       <div class="card-tag-strip">
         <span class="tag-badge tag-${escapeAttr((demo.console || '').toLowerCase())}">${escapeHtml(demo.console)}</span>
         <span class="tag-badge">${escapeHtml(demo.section_name)}</span>
@@ -1746,9 +1761,11 @@ function renderDetailModalContent(demo) {
   const currentVariant = (demo.variants && demo.variants[state.activeVariantIndex]) || {};
   const scans = currentVariant.scans || [];
   
-  const mainScanUrl = scans.length > 0 
-    ? (scans[0].local_url || scans[0].remote_url) 
-    : (demo.primary_thumbnail || "/assets/demopals/f-eur.jpg");
+  const mainScanUrl = resolveAssetUrl(
+    scans.length > 0 
+      ? (scans[0].local_url || scans[0].remote_url) 
+      : (demo.primary_thumbnail || "/assets/demopals/f-eur.jpg")
+  );
 
   let scanThumbsHtml = "";
   if (scans.length > 1) {
@@ -1756,7 +1773,7 @@ function renderDetailModalContent(demo) {
       <div class="scans-thumbs mt-2">
         ${scans.map((s, idx) => `
           <button class="scan-thumb-btn ${idx === 0 ? 'active' : ''}" data-scan-idx="${idx}" title="${escapeAttr(s.label || '')}">
-            <img src="${escapeAttr(s.local_url || s.remote_url)}" alt="${escapeAttr(s.label || '')}" />
+            <img src="${escapeAttr(resolveAssetUrl(s.local_url || s.remote_url))}" alt="${escapeAttr(s.label || '')}" onerror="this.onerror=null;this.src='/assets/demopals/f-eur.jpg';" />
           </button>
         `).join("")}
       </div>
@@ -1771,7 +1788,7 @@ function renderDetailModalContent(demo) {
         <div class="variant-pills-wrap">
           ${demo.variants.map((v, idx) => {
             const code = getShortRegionCode(v.country, v.sced ? v.sced.split("-")[0] : `R${idx + 1}`);
-            const flagHtml = v.flag_icon ? `<img src="${escapeAttr(v.flag_icon)}" alt="" class="flag-mini" />` : "";
+            const flagHtml = v.flag_icon ? `<img src="${escapeAttr(resolveAssetUrl(v.flag_icon))}" alt="" class="flag-mini" onerror="this.style.display='none';" />` : "";
             const titleTooltip = `${v.country || 'Release'}${v.sced ? ` (${v.sced})` : ''}`;
             return `
               <button class="btn-variant-pill ${idx === state.activeVariantIndex ? 'active' : ''}" data-variant-idx="${idx}" title="${escapeAttr(titleTooltip)}">
