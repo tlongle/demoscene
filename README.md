@@ -4,38 +4,7 @@ A sleek, self-hosted web app and archive designed to catalogue, inspect, and tra
 
 ---
 
-## 📁 Project Structure
-
-```text
-demo_scene/
-├── app/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI application, routes, and middleware
-│   ├── core/
-│   │   ├── config.py        # Centralized settings & default port 5363
-│   │   └── database.py      # SQLite database engine & collection queries
-│   └── services/
-│       ├── scraper.py       # Crimson Ceremony catalog scraper & sync
-│       ├── boxart.py        # IGDB Twitch API integration & cover cache
-│       ├── intel.py         # Game metadata enrichment & palette badges
-│       ├── downloader.py    # High-resolution offline scan downloader
-│       └── parser.py        # HTML & entry text block parser
-├── data/
-│   ├── demopals.db          # Persistent SQLite database
-│   └── assets/              # Offline disc scans, slipcases, and box art
-├── static/                  # PWA frontend (index.html, style.css, app.js)
-├── Dockerfile               # Production container image definition
-├── docker-compose.yml       # Port 5363 container orchestration
-├── requirements.txt         # Python dependencies
-├── run.sh                   # Local launch helper script
-├── start.py                 # Application entry point
-├── .env.example             # Environment template
-└── .gitignore               # Git ignore rules for clean repo
-```
-
----
-
-## 🚀 Docker Deployment (Port 5363)
+## Docker Deployment
 
 ### 1. Configure Environment (Optional)
 Copy `.env.example` to `.env`:
@@ -58,17 +27,6 @@ docker compose up -d --build
 
 * **Web UI Port**: `5363`
 * **Persistent Data**: Stored in `./data` (SQLite database + downloaded artwork)
-
----
-
-## 🌐 Nginx Proxy Manager Setup
-
-In Nginx Proxy Manager (NPM):
-* **Scheme**: `http`
-* **Forward Hostname / IP**: `172.17.0.1` *(Docker Host Gateway)* or your server's LAN IP
-* **Forward Port**: `5363`
-* **Websockets Support**: ✅ Toggle ON
-* **Block Common Exploits**: ✅ Toggle ON
 
 ---
 
