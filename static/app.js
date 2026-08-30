@@ -1,9 +1,48 @@
 /**
- * DEMOSCENE - PlayStation Demo Collector & Collection Manager
- * Dedicated Views: Archive Explorer, PriceCharting Collection Manager, Settings Hub
+ * DEMOSCENE - PlayStation PAL Demos Collection Manager
  */
 
 const API_BASE = "";
+
+// Regional short codes for compact release badges
+const REGION_SHORT_CODES = {
+  "australia": "AU",
+  "austria": "AT",
+  "belgium": "BE",
+  "benelux": "BNL",
+  "denmark": "DK",
+  "england": "EN",
+  "europe": "EUR",
+  "finland": "FI",
+  "france": "FR",
+  "germany": "DE",
+  "greece": "GR",
+  "holland": "NL",
+  "netherlands": "NL",
+  "ireland": "IE",
+  "italy": "IT",
+  "japan": "JP",
+  "norway": "NO",
+  "new zealand": "NZ",
+  "poland": "PL",
+  "portugal": "PT",
+  "russia": "RU",
+  "scandinavia": "SCAN",
+  "spain": "ES",
+  "sweden": "SE",
+  "switzerland": "CH",
+  "uk": "UK",
+  "united kingdom": "UK",
+  "usa": "US"
+};
+
+function getShortRegionCode(countryStr, fallback = "") {
+  if (!countryStr) return fallback || "REL";
+  const key = countryStr.toLowerCase().trim();
+  if (REGION_SHORT_CODES[key]) return REGION_SHORT_CODES[key];
+  if (key.length <= 4) return key.toUpperCase();
+  return key.slice(0, 3).toUpperCase();
+}
 
 // Application State
 const state = {
@@ -78,7 +117,7 @@ const elements = {
 
   // --- Collection Page Elements ---
   btnToggleMobileStats: document.getElementById("btnToggleMobileStats"),
-  collectionSideCard: document.getElementById("collectionSideCard"),
+  collectionSidebar: document.getElementById("collectionSidebar") || document.getElementById("collectionSideCard"),
   colStatOwnedCount: document.getElementById("colStatOwnedCount"),
   colStatTotalDemos: document.getElementById("colStatTotalDemos"),
   colStatCompletionRate: document.getElementById("colStatCompletionRate"),
@@ -202,7 +241,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 /* ==========================================================================
-   Navigation (3 Dedicated Views)
+   Navigation
    ========================================================================== */
 function setupNavigation() {
   elements.mainNavTabs.querySelectorAll(".nav-tab").forEach(tab => {
@@ -244,7 +283,7 @@ function navigateTo(pageName) {
 }
 
 /* ==========================================================================
-   PAGE 1: ARCHIVE EXPLORER
+   ARCHIVE EXPLORER
    ========================================================================== */
 function setupArchiveListeners() {
   // Search
@@ -533,13 +572,23 @@ function resetArchiveFilters() {
 }
 
 /* ==========================================================================
-   PAGE 2: MY COLLECTION (PriceCharting Manager & Stats Widget)
+   COLLECTION
    ========================================================================== */
 function setupCollectionListeners() {
   // Mobile Stats Toggle
-  elements.btnToggleMobileStats.addEventListener("click", () => {
-    elements.collectionSideCard.classList.toggle("show-mobile");
-  });
+  if (elements.btnToggleMobileStats && elements.collectionSidebar) {
+    elements.btnToggleMobileStats.addEventListener("click", () => {
+      const isShown = elements.collectionSidebar.classList.toggle("show-mobile");
+      if (isShown) {
+        elements.btnToggleMobileStats.textContent = "Hide Stats & Breakdown";
+        elements.btnToggleMobileStats.classList.add("ps-btn-dark");
+        elements.collectionSidebar.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } else {
+        elements.btnToggleMobileStats.textContent = "View Stats & Breakdown";
+        elements.btnToggleMobileStats.classList.remove("ps-btn-dark");
+      }
+    });
+  }
 
   // Search
   elements.colSearchInput.addEventListener("input", (e) => {
@@ -1637,13 +1686,18 @@ function renderDetailModalContent(demo) {
   if (demo.variants && demo.variants.length > 1) {
     variantTabsHtml = `
       <div class="variant-tabs mb-2">
-        <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px;">RELEASES &amp; SCANS:</label>
-        <div class="btn-group">
-          ${demo.variants.map((v, idx) => `
-            <button class="btn-toggle ${idx === state.activeVariantIndex ? 'active' : ''}" data-variant-idx="${idx}">
-              ${v.country || 'Release'} (${v.sced || 'Scan'})
-            </button>
-          `).join("")}
+        <label style="font-size:10px;font-weight:700;letter-spacing:0.5px;color:var(--text-muted);display:block;margin-bottom:4px;">RELEASES &amp; SCANS:</label>
+        <div class="variant-pills-wrap">
+          ${demo.variants.map((v, idx) => {
+            const code = getShortRegionCode(v.country, v.sced ? v.sced.split("-")[0] : `R${idx + 1}`);
+            const flagHtml = v.flag_icon ? `<img src="${v.flag_icon}" alt="" class="flag-mini" />` : "";
+            const titleTooltip = `${v.country || 'Release'}${v.sced ? ` (${v.sced})` : ''}`;
+            return `
+              <button class="btn-variant-pill ${idx === state.activeVariantIndex ? 'active' : ''}" data-variant-idx="${idx}" title="${titleTooltip}">
+                ${flagHtml} ${code}
+              </button>
+            `;
+          }).join("")}
         </div>
       </div>
     `;

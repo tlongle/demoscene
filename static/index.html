@@ -136,7 +136,7 @@
 
 
     <!-- =========================================================================
-         PAGE 2: MY COLLECTION (Side-Card Stats Breakdown + PriceCharting List/Cards)
+         COLLECTION PAGE
          ========================================================================= -->
     <main id="pageCollection" class="page-view" style="display: none;">
       
@@ -232,122 +232,126 @@
 
         </div>
 
-        <!-- SIDE STATS CARD (Right): Visual Progress Bars & Breakdown -->
-        <aside class="collection-side-card" id="collectionSideCard">
-          <div class="side-card-header">
-            <h3>Collection Breakdown</h3>
-          </div>
-          <div class="side-card-body">
-            
-            <!-- Overall Archive Completion Bar -->
-            <div class="stat-progress-block">
-              <div class="stat-bar-header">
-                <span>Archive Completion</span>
-                <strong id="colStatCompletionRate">0.0%</strong>
-              </div>
-              <div class="stat-bar">
-                <div class="stat-bar-fill fill-green" id="colStatBarTotal" style="width: 0%;"></div>
-              </div>
-              <div class="stat-bar-sub">
-                <span id="colStatOwnedCount">0</span> of <span id="colStatTotalDemos">872</span> Discs Owned
-              </div>
+        <!-- SIDEBAR CONTAINER (Right): Visual Progress Bars & Games Widget -->
+        <aside class="collection-sidebar" id="collectionSidebar">
+          
+          <!-- Card 1: Stats Breakdown Card -->
+          <div class="collection-side-card" id="collectionStatsCard">
+            <div class="side-card-header">
+              <h3>Collection Breakdown</h3>
             </div>
+            <div class="side-card-body">
+              
+              <!-- Overall Archive Completion Bar -->
+              <div class="stat-progress-block">
+                <div class="stat-bar-header">
+                  <span>Archive Completion</span>
+                  <strong id="colStatCompletionRate">0.0%</strong>
+                </div>
+                <div class="stat-bar">
+                  <div class="stat-bar-fill fill-green" id="colStatBarTotal" style="width: 0%;"></div>
+                </div>
+                <div class="stat-bar-sub">
+                  <span id="colStatOwnedCount">0</span> of <span id="colStatTotalDemos">872</span> Discs Owned
+                </div>
+              </div>
 
-            <!-- PS1 & PS2 Platform Bars -->
-            <div class="stat-progress-block mt-3">
-              <div class="stat-bar-header">
-                <span>PS1 Demos</span>
-                <strong id="colStatPs1Summary">0 / 590 (0.0%)</strong>
+              <!-- PS1 & PS2 Platform Bars -->
+              <div class="stat-progress-block mt-3">
+                <div class="stat-bar-header">
+                  <span>PS1 Demos</span>
+                  <strong id="colStatPs1Summary">0 / 590 (0.0%)</strong>
+                </div>
+                <div class="stat-bar">
+                  <div class="stat-bar-fill fill-ps1" id="colStatBarPs1" style="width: 0%;"></div>
+                </div>
               </div>
-              <div class="stat-bar">
-                <div class="stat-bar-fill fill-ps1" id="colStatBarPs1" style="width: 0%;"></div>
+
+              <div class="stat-progress-block mt-2">
+                <div class="stat-bar-header">
+                  <span>PS2 Demos</span>
+                  <strong id="colStatPs2Summary">0 / 282 (0.0%)</strong>
+                </div>
+                <div class="stat-bar">
+                  <div class="stat-bar-fill fill-ps2" id="colStatBarPs2" style="width: 0%;"></div>
+                </div>
               </div>
+
+              <!-- Physical Condition Breakdown Bars -->
+              <div class="side-card-section-title mt-4">PHYSICAL CONDITIONS</div>
+
+              <div class="stat-progress-block mt-2">
+                <div class="stat-bar-header">
+                  <span>Disc Only (Loose)</span>
+                  <strong class="txt-amber" id="colStatCondDiscOnly">0</strong>
+                </div>
+                <div class="stat-bar">
+                  <div class="stat-bar-fill fill-amber" id="colStatBarDiscOnly" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <div class="stat-progress-block mt-2">
+                <div class="stat-bar-header">
+                  <span>Mint (With Sleeve)</span>
+                  <strong class="txt-green" id="colStatCondMint">0</strong>
+                </div>
+                <div class="stat-bar">
+                  <div class="stat-bar-fill fill-green" id="colStatBarMint" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <div class="stat-progress-block mt-2">
+                <div class="stat-bar-header">
+                  <span>Good / Acceptable</span>
+                  <strong id="colStatCondGood">0</strong>
+                </div>
+                <div class="stat-bar">
+                  <div class="stat-bar-fill fill-charcoal" id="colStatBarGood" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <!-- Packaging & Testing Checklist Bars -->
+              <div class="side-card-section-title mt-4">PACKAGING &amp; TESTING</div>
+
+              <div class="stat-progress-block mt-2">
+                <div class="stat-bar-header">
+                  <span>With Sleeve</span>
+                  <strong id="colStatWithSleeve">0</strong>
+                </div>
+                <div class="stat-bar">
+                  <div class="stat-bar-fill fill-blue" id="colStatBarWithSleeve" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <div class="stat-progress-block mt-2">
+                <div class="stat-bar-header">
+                  <span>In Case</span>
+                  <strong id="colStatInCase">0</strong>
+                </div>
+                <div class="stat-bar">
+                  <div class="stat-bar-fill fill-blue" id="colStatBarInCase" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <div class="stat-progress-block mt-2">
+                <div class="stat-bar-header">
+                  <span>Tested &amp; Working</span>
+                  <strong id="colStatWorking">0</strong>
+                </div>
+                <div class="stat-bar">
+                  <div class="stat-bar-fill fill-green" id="colStatBarWorking" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <!-- Series Ownership Breakdown Details -->
+              <details class="widget-series-details mt-3">
+                <summary>Magazine Series Breakdown</summary>
+                <div class="series-breakdown-grid" id="colStatSeriesBreakdown">
+                  <!-- Injected dynamically -->
+                </div>
+              </details>
+
             </div>
-
-            <div class="stat-progress-block mt-2">
-              <div class="stat-bar-header">
-                <span>PS2 Demos</span>
-                <strong id="colStatPs2Summary">0 / 282 (0.0%)</strong>
-              </div>
-              <div class="stat-bar">
-                <div class="stat-bar-fill fill-ps2" id="colStatBarPs2" style="width: 0%;"></div>
-              </div>
-            </div>
-
-            <!-- Physical Condition Breakdown Bars -->
-            <div class="side-card-section-title mt-4">PHYSICAL CONDITIONS</div>
-
-            <div class="stat-progress-block mt-2">
-              <div class="stat-bar-header">
-                <span>Disc Only (Loose)</span>
-                <strong class="txt-amber" id="colStatCondDiscOnly">0</strong>
-              </div>
-              <div class="stat-bar">
-                <div class="stat-bar-fill fill-amber" id="colStatBarDiscOnly" style="width: 0%;"></div>
-              </div>
-            </div>
-
-            <div class="stat-progress-block mt-2">
-              <div class="stat-bar-header">
-                <span>Mint (With Sleeve)</span>
-                <strong class="txt-green" id="colStatCondMint">0</strong>
-              </div>
-              <div class="stat-bar">
-                <div class="stat-bar-fill fill-green" id="colStatBarMint" style="width: 0%;"></div>
-              </div>
-            </div>
-
-            <div class="stat-progress-block mt-2">
-              <div class="stat-bar-header">
-                <span>Good / Acceptable</span>
-                <strong id="colStatCondGood">0</strong>
-              </div>
-              <div class="stat-bar">
-                <div class="stat-bar-fill fill-charcoal" id="colStatBarGood" style="width: 0%;"></div>
-              </div>
-            </div>
-
-            <!-- Packaging & Testing Checklist Bars -->
-            <div class="side-card-section-title mt-4">PACKAGING &amp; TESTING</div>
-
-            <div class="stat-progress-block mt-2">
-              <div class="stat-bar-header">
-                <span>With Sleeve</span>
-                <strong id="colStatWithSleeve">0</strong>
-              </div>
-              <div class="stat-bar">
-                <div class="stat-bar-fill fill-blue" id="colStatBarWithSleeve" style="width: 0%;"></div>
-              </div>
-            </div>
-
-            <div class="stat-progress-block mt-2">
-              <div class="stat-bar-header">
-                <span>In Case</span>
-                <strong id="colStatInCase">0</strong>
-              </div>
-              <div class="stat-bar">
-                <div class="stat-bar-fill fill-blue" id="colStatBarInCase" style="width: 0%;"></div>
-              </div>
-            </div>
-
-            <div class="stat-progress-block mt-2">
-              <div class="stat-bar-header">
-                <span>Tested &amp; Working</span>
-                <strong id="colStatWorking">0</strong>
-              </div>
-              <div class="stat-bar">
-                <div class="stat-bar-fill fill-green" id="colStatBarWorking" style="width: 0%;"></div>
-              </div>
-            </div>
-
-            <!-- Series Ownership Breakdown Details -->
-            <details class="widget-series-details mt-3">
-              <summary>Magazine Series Breakdown</summary>
-              <div class="series-breakdown-grid" id="colStatSeriesBreakdown">
-                <!-- Injected dynamically -->
-              </div>
-            </details>
-
           </div>
 
           <!-- Card 2: Games in Collection Widget -->

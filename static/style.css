@@ -586,14 +586,23 @@ body {
   gap: 12px;
 }
 
-/* Side Stats Card */
+/* Sidebar Container & Cards */
+.collection-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: sticky;
+  top: 14px;
+  min-width: 0;
+}
+
 .collection-side-card {
   background: var(--ps1-white);
   border: 1px solid var(--ps1-border);
-  position: sticky;
-  top: 14px;
   display: flex;
   flex-direction: column;
+  border-radius: 2px;
+  min-width: 0;
 }
 
 .side-card-header {
@@ -1428,6 +1437,72 @@ body {
   grid-template-columns: 320px 1fr;
   gap: 20px;
   min-width: 0;
+  width: 100%;
+}
+
+.detail-left {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  width: 100%;
+}
+
+.detail-right {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  width: 100%;
+}
+
+/* Releases & Scans Cascading Micro-Pills */
+.variant-tabs {
+  margin-bottom: 10px;
+  width: 100%;
+}
+
+.variant-pills-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.btn-variant-pill {
+  background: var(--ps1-grey-panel);
+  border: 1px solid var(--ps1-border);
+  color: var(--text-main);
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono, inherit);
+  border-radius: 2px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  line-height: 1.3;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.btn-variant-pill:hover {
+  background: #dedede;
+  border-color: var(--ps1-charcoal);
+}
+
+.btn-variant-pill.active {
+  background: var(--ps1-charcoal);
+  color: #ffffff;
+  border-color: var(--ps1-dark);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.btn-variant-pill .flag-mini {
+  width: 13px;
+  height: 9px;
+  margin: 0;
+  vertical-align: middle;
 }
 
 .scans-section {
@@ -1713,17 +1788,20 @@ body {
 
 @media (max-width: 900px) {
   .collection-layout {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
   }
 
-  .collection-side-card {
+  .collection-sidebar {
     display: none;
     position: static;
+    width: 100%;
+    margin-bottom: 14px;
+    order: -1;
   }
 
-  .collection-side-card.show-mobile {
-    display: flex;
-    margin-bottom: 12px;
+  .collection-sidebar.show-mobile {
+    display: flex !important;
   }
 
   .mobile-only-btn {
