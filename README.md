@@ -13,7 +13,7 @@ Copy `.env.example` to `.env`:
 cp .env.example .env
 ```
 
-*(Optional)* If you have Twitch Developer credentials for official 1080p IGDB box art, add them to `.env` (or configure them directly in the in-app **⚙️ Settings** modal):
+*(Optional)* If you have Twitch Developer credentials for official 1080p IGDB box art, add them to `.env` (or configure them directly in the in-app **Settings** modal):
 ```env
 PORT=5363
 TWITCH_CLIENT_ID=your_twitch_client_id
