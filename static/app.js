@@ -192,6 +192,9 @@ document.addEventListener("DOMContentLoaded", () => {
   setupSettingsListeners();
   setupModalListeners();
 
+  setArchiveLayout(state.archive.layout);
+  setCollectionLayout(state.collection.layout);
+
   loadArchiveFilters();
   loadStats();
   fetchArchiveDemos(true);
@@ -638,10 +641,16 @@ function setCollectionLayout(layout) {
     elements.btnColViewCards.classList.add("active");
     elements.btnColViewList.classList.remove("active");
     elements.collectionContainer.className = "disc-grid";
+    if (elements.collectionContainerWrapper) {
+      elements.collectionContainerWrapper.className = "cards-mode-wrap";
+    }
   } else {
     elements.btnColViewList.classList.add("active");
     elements.btnColViewCards.classList.remove("active");
     elements.collectionContainer.className = "pc-list";
+    if (elements.collectionContainerWrapper) {
+      elements.collectionContainerWrapper.className = "pc-table-wrap";
+    }
   }
 
   renderCollectionDemos(state.collection.demos);
