@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import os
 import json
+import secrets
 
 from app.core.config import settings
 import app.core.database as db
@@ -24,13 +25,13 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 def verify_admin_key(api_key: Optional[str] = Security(api_key_header)):
     """
-    Verify admin API key for mutating/sensitive operations.
+    Verify admin API key for mutating/sensitive operations using constant-time comparison.
     If ADMIN_API_KEY is not configured in settings, allows open access for local development.
     """
     configured_key = settings.ADMIN_API_KEY
     if not configured_key:
         return True
-    if not api_key or api_key.strip() != configured_key:
+    if not api_key or not secrets.compare_digest(api_key.strip(), configured_key):
         raise HTTPException(
             status_code=401,
             detail="Admin authentication required. Please configure a valid API Key."
@@ -93,7 +94,7 @@ class ImportPayload(BaseModel):
 def get_auth_status(api_key: Optional[str] = Security(api_key_header)):
     """Check if admin key is configured and if provided key is valid."""
     is_required = bool(settings.ADMIN_API_KEY)
-    is_authenticated = (not is_required) or (bool(api_key) and api_key.strip() == settings.ADMIN_API_KEY)
+    is_authenticated = (not is_required) or (bool(api_key) and secrets.compare_digest(api_key.strip(), settings.ADMIN_API_KEY))
     return {
         "auth_required": is_required,
         "authenticated": is_authenticated
@@ -257,7 +258,7 @@ def get_filter_options():
     }
 
 
-@app.get("/api/export")
+@app.get("/api/export", dependencies=[Depends(verify_admin_key)])
 def export_backup():
     """Export complete collection data for JSON backup."""
     return db.export_collection_data()

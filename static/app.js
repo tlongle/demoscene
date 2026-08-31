@@ -1219,7 +1219,7 @@ function updateCollectionBulkCount() {
 
 async function handleQuickCollectionBulkUpdate(actionType) {
   if (state.collection.selectedIds.size === 0) {
-    alert("Please select at least one disc.");
+    showToast("Please select at least one disc to update.", "warning");
     return;
   }
 
@@ -1508,9 +1508,14 @@ async function quickToggleCollectionStatus(demo) {
       demo.coll_status = nextStatus;
       renderArchiveDemos(state.archive.demos, false);
       loadStats();
+      showToast(nextStatus === "owned" ? `Added "${demo.title}" to collection` : `Removed "${demo.title}" from collection`, "success");
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      showToast(errData.detail || "Authentication required to update collection.", "error");
     }
   } catch (err) {
     console.error("Failed to update status:", err);
+    showToast(`Error updating collection: ${err.message}`, "error");
   }
 }
 
@@ -1748,7 +1753,12 @@ async function handleFetchBoxart() {
 
 async function handleExportBackup() {
   try {
-    const res = await fetch(`${API_BASE}/api/export`);
+    const res = await apiFetch(`${API_BASE}/api/export`);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      showToast(errData.detail || "Authentication required to export collection.", "error");
+      return;
+    }
     const data = await res.json();
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -1757,8 +1767,9 @@ async function handleExportBackup() {
     a.download = `demoscene-collection-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    showToast("Collection ledger exported successfully.", "success");
   } catch (err) {
-    alert("Export failed: " + err.message);
+    showToast(`Export failed: ${err.message}`, "error");
   }
 }
 
@@ -2136,6 +2147,8 @@ async function saveModalCollectionState(demo, overrideStatus = null) {
 /* ==========================================================================
    Modal Helpers
    ========================================================================== */
+let previousActiveElement = null;
+
 function openZoomModal(imgUrl, captionText) {
   elements.zoomImage.src = imgUrl;
   elements.zoomCaption.textContent = captionText;
@@ -2143,18 +2156,35 @@ function openZoomModal(imgUrl, captionText) {
 }
 
 function openModal(modal) {
+  previousActiveElement = document.activeElement;
   modal.style.display = "flex";
   document.body.classList.add("modal-open");
+
+  // Focus close button or first actionable element
+  const focusable = modal.querySelector("button, input, select, textarea, [tabindex]:not([tabindex='-1'])");
+  if (focusable) {
+    focusable.focus();
+  }
 }
 
 function closeModal(modal) {
   modal.style.display = "none";
   checkBodyScrollLock();
+
+  if (previousActiveElement && typeof previousActiveElement.focus === "function") {
+    previousActiveElement.focus();
+    previousActiveElement = null;
+  }
 }
 
 function closeAllModals() {
   document.querySelectorAll(".ps-modal-backdrop").forEach(m => m.style.display = "none");
   checkBodyScrollLock();
+
+  if (previousActiveElement && typeof previousActiveElement.focus === "function") {
+    previousActiveElement.focus();
+    previousActiveElement = null;
+  }
 }
 
 function checkBodyScrollLock() {
@@ -2170,4 +2200,18 @@ function showFormFeedback(el, msg, type = "success") {
   el.textContent = msg;
   el.className = `form-feedback ${type}`;
   el.style.display = "block";
+}
+
+function showToast(msg, type = "info") {
+  const container = document.getElementById("toastContainer");
+  if (!container) return;
+  const toast = document.createElement("div");
+  toast.className = `ps-toast toast-${type}`;
+  toast.textContent = msg;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.animation = "toastFadeOut 0.25s ease-in forwards";
+    setTimeout(() => toast.remove(), 250);
+  }, 3500);
 }

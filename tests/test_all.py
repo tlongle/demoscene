@@ -105,6 +105,9 @@ def test_api_admin_auth_protection(monkeypatch):
     r_mutate = client.post("/api/collection/test-id", json={"status": "owned"})
     assert r_mutate.status_code == 401
 
+    r_export = client.get("/api/export")
+    assert r_export.status_code == 401
+
     # 2. Invalid key -> 401
     r_invalid = client.post(
         "/api/collection/test-id",
@@ -120,6 +123,9 @@ def test_api_admin_auth_protection(monkeypatch):
         json={"status": "owned"}
     )
     assert r_valid.status_code in (200, 404)  # Auth check passed!
+
+    r_export_valid = client.get("/api/export", headers={"X-API-Key": "super_secret_demo_key_123"})
+    assert r_export_valid.status_code == 200
 
 
 def test_genre_detection_and_intel():

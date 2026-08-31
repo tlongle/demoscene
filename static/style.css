@@ -31,6 +31,9 @@
   --text-main: #1f2937;
   --text-muted: #6b7280;
   --text-light: #f9fafb;
+
+  --accent-blue: #0050c8;
+  --border-color: #b5b5b5;
   
   --font-main: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
@@ -1933,4 +1936,56 @@ body.modal-open {
     width: 100%;
     text-align: center;
   }
+}
+
+/* ==========================================================================
+   Toast Notification System
+   ========================================================================== */
+#toastContainer {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.ps-toast {
+  background: var(--ps1-dark);
+  color: #fff;
+  padding: 12px 18px;
+  border-radius: 6px;
+  font-size: 13px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: auto;
+  animation: toastSlideIn 0.25s ease-out forwards;
+  max-width: 380px;
+  border-left: 4px solid var(--accent-blue);
+}
+
+.ps-toast.toast-error {
+  border-left-color: var(--ps-circle);
+}
+
+.ps-toast.toast-success {
+  border-left-color: var(--ps-triangle);
+}
+
+.ps-toast.toast-warning {
+  border-left-color: var(--status-wanted);
+}
+
+@keyframes toastSlideIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toastFadeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(12px); }
 }

@@ -109,7 +109,8 @@ def _run_download_and_extract(url: str) -> None:
             _STATUS["message"] = "Extracting artwork files into data/assets/..."
 
         with tarfile.open(download_target, "r:gz") as tar:
-            tar.extractall(path=str(settings.BASE_DIR))
+            # Python 3.12+ safe extraction filter prevents path traversal and dangerous file types
+            tar.extractall(path=str(settings.BASE_DIR), filter="data")
 
         # Cleanup archive
         if download_target.exists():
@@ -151,6 +152,15 @@ def start_asset_pack_download(url: Optional[str] = None) -> Dict[str, Any]:
         return {
             "success": False,
             "message": "No asset pack URL configured."
+        }
+
+    # Restrict custom URLs to HTTPS schemes and valid tar.gz formats
+    from urllib.parse import urlparse
+    parsed = urlparse(download_url)
+    if parsed.scheme != "https" or not (download_url.endswith(".tar.gz") or download_url.endswith(".tgz")):
+        return {
+            "success": False,
+            "message": "Invalid download URL. Must be an HTTPS link to a .tar.gz archive."
         }
 
     thread = threading.Thread(target=_run_download_and_extract, args=(download_url,), daemon=True)

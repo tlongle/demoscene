@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
   <title>DEMOSCENE - PlayStation Demo Archive &amp; Collection Manager</title>
   <meta name="description" content="Clean PS1 &amp; PS2 Demo Disc Collector, Disc Scans &amp; Box Art Archive." />
   
@@ -583,7 +583,7 @@
        ========================================================================= -->
 
   <!-- Full Demo Detail Modal -->
-  <div class="ps-modal-backdrop" id="detailModal" style="display: none;">
+  <div class="ps-modal-backdrop" id="detailModal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="ps-modal ps-modal-lg">
       <div class="ps-modal-header">
         <div class="modal-title-wrap">
@@ -594,7 +594,7 @@
             <span class="sced-mono" id="modalScedBadge">SCED-52161</span>
           </div>
         </div>
-        <button class="ps-modal-close" id="btnCloseDetail">✕</button>
+        <button class="ps-modal-close" id="btnCloseDetail" aria-label="Close detail dialog">✕</button>
       </div>
 
       <div class="ps-modal-body" id="detailModalContent">
@@ -604,11 +604,11 @@
   </div>
 
   <!-- Single Disc Quick Edit Modal (For PriceCharting List Rows) -->
-  <div class="ps-modal-backdrop" id="singleEditModal" style="display: none;">
+  <div class="ps-modal-backdrop" id="singleEditModal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="singleEditModalTitle">
     <div class="ps-modal ps-modal-md">
       <div class="ps-modal-header">
         <h3 id="singleEditModalTitle">Edit Collection Item</h3>
-        <button class="ps-modal-close" id="btnCloseSingleEdit">✕</button>
+        <button class="ps-modal-close" id="btnCloseSingleEdit" aria-label="Close edit dialog">✕</button>
       </div>
       <div class="ps-modal-body">
         <div class="form-group">
@@ -645,11 +645,11 @@
   </div>
 
   <!-- Bulk Edit Modal -->
-  <div class="ps-modal-backdrop" id="bulkEditModal" style="display: none;">
+  <div class="ps-modal-backdrop" id="bulkEditModal" style="display: none;" role="dialog" aria-modal="true" aria-label="Batch Edit Discs">
     <div class="ps-modal ps-modal-md">
       <div class="ps-modal-header">
         <h3>Batch Edit Discs</h3>
-        <button class="ps-modal-close" id="btnCloseBulkModal">✕</button>
+        <button class="ps-modal-close" id="btnCloseBulkModal" aria-label="Close batch edit dialog">✕</button>
       </div>
       <div class="ps-modal-body">
         <p class="bulk-modal-desc">Apply bulk changes to all selected discs at once:</p>
@@ -691,21 +691,21 @@
   </div>
 
   <!-- Welcome / Setup Wizard Modal -->
-  <div class="ps-modal-backdrop" id="welcomeWizardModal" style="display: none;">
+  <div class="ps-modal-backdrop" id="welcomeWizardModal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="wizardHeaderTitle">
     <div class="ps-modal ps-modal-md" style="max-width: 580px;">
       <div class="ps-modal-header" style="flex-direction: column; align-items: flex-start; gap: 6px; position: relative;">
-        <button class="ps-modal-close" id="btnCloseWizard" style="position: absolute; top: 12px; right: 12px;">✕</button>
+        <button class="ps-modal-close" id="btnCloseWizard" style="position: absolute; top: 12px; right: 12px;" aria-label="Close setup wizard">✕</button>
         <div style="display: flex; gap: 6px; align-items: center;">
           <span class="tag-badge tag-ps1">PS1</span>
           <span class="tag-badge tag-ps2">PS2</span>
-          <span class="tag-badge" style="background: rgba(255,255,255,0.08);">SETUP WIZARD</span>
+          <span class="tag-badge" style="background: rgba(0,0,0,0.08); color: var(--text-main);">SETUP WIZARD</span>
         </div>
-        <h2 style="font-size: 20px; margin: 4px 0 0; color: #fff; font-family: var(--font-display); letter-spacing: 0.5px;">Welcome to DEMOSCENE</h2>
+        <h2 id="wizardHeaderTitle" style="font-size: 20px; margin: 4px 0 0; color: var(--ps1-charcoal); letter-spacing: 0.5px;">Welcome to DEMOSCENE</h2>
         <p style="color: var(--text-muted); font-size: 13px; margin: 0;">PlayStation PAL Demo Disc Collector &amp; Archive</p>
       </div>
 
       <div class="ps-modal-body" style="padding: 16px 20px;">
-        <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; display: flex; gap: 12px; align-items: flex-start;">
+        <div style="background: rgba(0,0,0,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; display: flex; gap: 12px; align-items: flex-start;">
           <div style="font-size: 24px; line-height: 1;">💿</div>
           <div>
             <strong style="color: var(--text-main); font-size: 13px; display: block; margin-bottom: 2px;">Master Catalog Pre-Loaded</strong>
@@ -726,12 +726,12 @@
         </div>
 
         <!-- Wizard Progress Bar -->
-        <div id="wizardProgressContainer" style="display: none; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; margin-top: 12px;">
+        <div id="wizardProgressContainer" style="display: none; background: rgba(0,0,0,0.05); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; margin-top: 12px;">
           <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 6px; font-weight: 600;">
             <span id="wizardStatusText" style="color: var(--text-main);">Connecting to CDN...</span>
             <span id="wizardPercentText" style="color: var(--accent-blue);">0%</span>
           </div>
-          <div class="progress-track" style="height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden;">
+          <div class="progress-track" style="height: 8px; background: rgba(0,0,0,0.1); border-radius: 4px; overflow: hidden;">
             <div id="wizardProgressBar" style="width: 0%; height: 100%; background: var(--accent-blue); transition: width 0.3s ease;"></div>
           </div>
         </div>
@@ -743,6 +743,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" aria-live="polite"></div>
 
   <script src="app.js"></script>
 </body>

@@ -492,6 +492,13 @@ def peek_and_sync_updates(db_path: str = None, verbose: bool = True) -> Dict[str
             demos = scrape_section_html(sec, verbose=False)
             new_discovered_demos.extend(demos)
 
+    # Download high-res scans, slipcases, and flags before local path normalization
+    from app.services.downloader import download_demo_assets
+    for idx, demo in enumerate(new_discovered_demos, 1):
+        if verbose:
+            print(f"[{idx}/{len(new_discovered_demos)}] Downloading artwork & scans for '{demo.get('title')}'...")
+        download_demo_assets(demo, verbose=False)
+
     # Differential merge into database
     merge_result = differential_merge_demos(new_discovered_demos, db_path=db_path)
     set_metadata("last_synced_date", latest_found_date, db_path=db_path)
