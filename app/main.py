@@ -17,6 +17,7 @@ from app.services import scraper
 from app.services import intel as game_intel
 from app.services import downloader as download_assets
 from app.services import boxart as boxart_service
+from app.services import asset_pack
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -119,13 +120,9 @@ def update_settings(payload: SettingsPayload):
 
 @app.on_event("startup")
 def startup_event():
-    """Initialize DB and trigger initial scrape if empty."""
+    """Initialize DB and seed master catalog if empty."""
     settings.ensure_dirs()
     db.init_db()
-    stats = db.get_stats()
-    if stats["total_demos"] == 0:
-        print("⚠️ No demo discs found in database. Running initial scrape...")
-        scraper.run_scraper(verbose=True)
 
 
 # Mount local assets for disc photos, slipcase scans, and box art
@@ -274,10 +271,16 @@ def import_backup(payload: ImportPayload):
 
 
 @app.post("/api/scrape", dependencies=[Depends(verify_admin_key)])
-def trigger_scrape(background_tasks: BackgroundTasks):
-    """Trigger background scrape of crimson-ceremony.net/demopals."""
-    background_tasks.add_task(scraper.run_scraper, verbose=True)
-    return {"success": True, "message": "Scraper task queued."}
+def trigger_scrape():
+    """Check Crimson Ceremony for new releases and perform targeted incremental sync."""
+    result = scraper.peek_and_sync_updates(verbose=True)
+    return {
+        "success": result.get("status") != "error",
+        "status": result.get("status"),
+        "message": result.get("message") or result.get("error", "Update check complete."),
+        "new_discs_added": result.get("new_discs_added", 0),
+        "last_synced_date": result.get("last_synced_date", "")
+    }
 
 
 @app.post("/api/assets/download-all", dependencies=[Depends(verify_admin_key)])
@@ -292,6 +295,26 @@ def trigger_boxart_fetch(background_tasks: BackgroundTasks, limit: int = 150):
     """Trigger batch resolution and download of game box art."""
     background_tasks.add_task(boxart_service.batch_fetch_boxart, limit=limit)
     return {"success": True, "message": f"Box art download queued for up to {limit} games."}
+
+
+@app.get("/api/assets/pack/status")
+def get_pack_status():
+    """Check status of local assets and any active pack download task."""
+    return asset_pack.get_asset_pack_status()
+
+
+class AssetPackDownloadPayload(BaseModel):
+    url: Optional[str] = None
+
+
+@app.post("/api/assets/pack/download", dependencies=[Depends(verify_admin_key)])
+def download_asset_pack(payload: Optional[AssetPackDownloadPayload] = None):
+    """Trigger 1-click download & extraction of complete pre-packaged artwork bundle."""
+    custom_url = payload.url if payload else None
+    res = asset_pack.start_asset_pack_download(custom_url)
+    if not res["success"]:
+        raise HTTPException(status_code=400, detail=res["message"])
+    return res
 
 
 # Mount static files directory

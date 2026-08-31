@@ -21,11 +21,13 @@ class Settings:
 
     # Storage Paths
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
+    DATA_DIR: str = str(BASE_DIR / "data")
     DB_PATH: str = os.environ.get("DEMOPALS_DB_PATH", str(BASE_DIR / "data" / "demopals.db"))
     ASSETS_DIR: str = os.environ.get("ASSETS_DIR", str(BASE_DIR / "data" / "assets"))
     DEMOPALS_ASSETS_DIR: str = str(Path(ASSETS_DIR) / "demopals")
     BOXART_ASSETS_DIR: str = str(Path(ASSETS_DIR) / "boxart")
     STATIC_DIR: str = str(BASE_DIR / "static")
+    ASSET_PACK_URL: str = os.environ.get("ASSET_PACK_URL", "https://github.com/tlongle/demo_scene/releases/download/v1.0.0/demoscene_assets.tar.gz").strip()
 
     # IGDB / Twitch API Credentials
     @property

@@ -240,6 +240,12 @@ const elements = {
   btnSaveSettings: document.getElementById("btnSaveSettings"),
   igdbStatusBadge: document.getElementById("igdbStatusBadge"),
   settingsFeedback: document.getElementById("settingsFeedback"),
+  btnDownloadAssetPack: document.getElementById("btnDownloadAssetPack"),
+  assetPackProgressContainer: document.getElementById("assetPackProgressContainer"),
+  assetPackStatusText: document.getElementById("assetPackStatusText"),
+  assetPackPercentText: document.getElementById("assetPackPercentText"),
+  assetPackProgressBar: document.getElementById("assetPackProgressBar"),
+  assetPackDownloadStatus: document.getElementById("assetPackDownloadStatus"),
   btnDownloadScans: document.getElementById("btnDownloadScans"),
   scansDownloadStatus: document.getElementById("scansDownloadStatus"),
   btnFetchBoxart: document.getElementById("btnFetchBoxart"),
@@ -255,7 +261,15 @@ const elements = {
   authFeedback: document.getElementById("authFeedback"),
   btnSaveAdminKey: document.getElementById("btnSaveAdminKey"),
 
-  // Modals
+  // Modals & Wizard
+  welcomeWizardModal: document.getElementById("welcomeWizardModal"),
+  btnWizardDownload: document.getElementById("btnWizardDownload"),
+  btnWizardSkip: document.getElementById("btnWizardSkip"),
+  wizardProgressContainer: document.getElementById("wizardProgressContainer"),
+  wizardStatusText: document.getElementById("wizardStatusText"),
+  wizardPercentText: document.getElementById("wizardPercentText"),
+  wizardProgressBar: document.getElementById("wizardProgressBar"),
+
   detailModal: document.getElementById("detailModal"),
   detailModalContent: document.getElementById("detailModalContent"),
   modalTitle: document.getElementById("modalTitle"),
@@ -278,6 +292,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupCollectionListeners();
   setupSettingsListeners();
   setupModalListeners();
+  setupWizardListeners();
 
   setArchiveLayout(state.archive.layout);
   setCollectionLayout(state.collection.layout);
@@ -286,6 +301,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadStats();
   fetchArchiveDemos(true);
   checkSettingsStatus();
+  checkWelcomeWizard();
 });
 
 /* ==========================================================================
@@ -1500,6 +1516,9 @@ async function quickToggleCollectionStatus(demo) {
    ========================================================================== */
 function setupSettingsListeners() {
   elements.btnSaveSettings.addEventListener("click", handleSaveSettings);
+  if (elements.btnDownloadAssetPack) {
+    elements.btnDownloadAssetPack.addEventListener("click", () => startAssetPackDownload(false));
+  }
   elements.btnDownloadScans.addEventListener("click", handleDownloadScans);
   elements.btnFetchBoxart.addEventListener("click", handleFetchBoxart);
   elements.btnExportJson.addEventListener("click", handleExportBackup);
@@ -1607,6 +1626,109 @@ async function handleSaveSettings() {
   }
 }
 
+let assetPackPollTimer = null;
+
+async function startAssetPackDownload(isWizard = false) {
+  const btn = isWizard ? elements.btnWizardDownload : elements.btnDownloadAssetPack;
+  if (btn) btn.disabled = true;
+
+  const progContainer = isWizard ? elements.wizardProgressContainer : elements.assetPackProgressContainer;
+  const statusText = isWizard ? elements.wizardStatusText : elements.assetPackStatusText;
+  const pctText = isWizard ? elements.wizardPercentText : elements.assetPackPercentText;
+  const bar = isWizard ? elements.wizardProgressBar : elements.assetPackProgressBar;
+
+  if (progContainer) progContainer.style.display = "block";
+  if (statusText) statusText.textContent = "Connecting to GitHub Releases CDN...";
+
+  try {
+    const res = await apiFetch(`${API_BASE}/api/assets/pack/download`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) {
+      if (statusText) statusText.textContent = `⚠️ ${data.detail || "Download failed."}`;
+      if (btn) btn.disabled = false;
+      return;
+    }
+
+    if (assetPackPollTimer) clearInterval(assetPackPollTimer);
+    assetPackPollTimer = setInterval(async () => {
+      try {
+        const sRes = await fetch(`${API_BASE}/api/assets/pack/status`);
+        if (!sRes.ok) return;
+        const sData = await sRes.json();
+
+        if (statusText) statusText.textContent = sData.message || (sData.stage === "extracting" ? "Extracting archive..." : "Downloading artwork...");
+        if (pctText) pctText.textContent = `${sData.percent}%`;
+        if (bar) bar.style.width = `${sData.percent}%`;
+
+        if (sData.stage === "completed") {
+          clearInterval(assetPackPollTimer);
+          assetPackPollTimer = null;
+          if (statusText) statusText.textContent = sData.message || "✓ Artwork successfully installed!";
+          if (btn) {
+            btn.textContent = "✓ Artwork Installed";
+            btn.disabled = true;
+          }
+          if (isWizard && elements.btnWizardSkip) {
+            elements.btnWizardSkip.textContent = "Get Started";
+          }
+          // Refresh views so all newly extracted images load immediately
+          fetchArchiveDemos(false);
+          loadCollectionDemos();
+        } else if (sData.stage === "error") {
+          clearInterval(assetPackPollTimer);
+          assetPackPollTimer = null;
+          if (statusText) statusText.textContent = `⚠️ Error: ${sData.error || sData.message}`;
+          if (btn) btn.disabled = false;
+        }
+      } catch (err) {
+        // Polling retry
+      }
+    }, 600);
+
+  } catch (err) {
+    if (statusText) statusText.textContent = `Error: ${err.message}`;
+    if (btn) btn.disabled = false;
+  }
+}
+
+function setupWizardListeners() {
+  if (elements.btnWizardDownload) {
+    elements.btnWizardDownload.addEventListener("click", () => startAssetPackDownload(true));
+  }
+  if (elements.btnWizardSkip) {
+    elements.btnWizardSkip.addEventListener("click", closeWelcomeWizard);
+  }
+}
+
+function openWelcomeWizard() {
+  if (elements.welcomeWizardModal) {
+    elements.welcomeWizardModal.style.display = "flex";
+  }
+}
+
+function closeWelcomeWizard() {
+  if (elements.welcomeWizardModal) {
+    elements.welcomeWizardModal.style.display = "none";
+  }
+  localStorage.setItem("demoscene_wizard_dismissed", "true");
+}
+
+async function checkWelcomeWizard() {
+  const dismissed = localStorage.getItem("demoscene_wizard_dismissed");
+  if (dismissed) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/assets/pack/status`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.assets_ready && !data.is_downloading) {
+      openWelcomeWizard();
+    }
+  } catch (e) {
+    // Ignore network error on status check
+  }
+}
+
 async function handleDownloadScans() {
   elements.btnDownloadScans.disabled = true;
   elements.scansDownloadStatus.textContent = "Scans download running in background...";
@@ -1673,14 +1795,22 @@ async function handleImportBackup(e) {
 }
 
 async function handleSyncScrape() {
-  if (!confirm("Re-sync catalog with Crimson Ceremony archive in the background?")) return;
   elements.btnSyncScrape.disabled = true;
-  elements.syncStatus.textContent = "Scraping archive sections...";
+  elements.syncStatus.textContent = "Checking Crimson Ceremony for new releases...";
   try {
-    await apiFetch(`${API_BASE}/api/scrape`, { method: "POST" });
-    elements.syncStatus.textContent = "Sync task queued. The database will update shortly.";
+    const res = await apiFetch(`${API_BASE}/api/scrape`, { method: "POST" });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      elements.syncStatus.textContent = `✓ ${data.message}`;
+      await loadStats();
+      await loadArchiveFilters();
+    } else {
+      elements.syncStatus.textContent = `⚠️ ${data.message || 'Check failed.'}`;
+    }
   } catch (err) {
     elements.syncStatus.textContent = `Error: ${err.message}`;
+  } finally {
+    elements.btnSyncScrape.disabled = false;
   }
 }
 

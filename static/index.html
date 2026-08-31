@@ -470,12 +470,21 @@
 
             <div class="setting-action-block mt-3">
               <div>
-                <strong>Disc Scans &amp; Slipcases</strong>
-                <p class="text-muted" style="font-size: 11px;">Downloads all high-res scans (-1.jpg, -2.jpg) into ./data/assets/demopals</p>
+                <strong>Complete Artwork Pack (Recommended)</strong>
+                <p class="text-muted" style="font-size: 11px;">1-Click fast download &amp; extract from GitHub CDN (~590 MB)</p>
               </div>
-              <button class="ps-btn ps-btn-dark" id="btnDownloadScans">Download All Scans</button>
+              <button class="ps-btn ps-btn-dark" id="btnDownloadAssetPack">Download Pack</button>
             </div>
-            <div id="scansDownloadStatus" class="asset-status-text mt-1"></div>
+            <div id="assetPackProgressContainer" style="display: none; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px; margin-top: 8px;">
+              <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; font-weight: 600;">
+                <span id="assetPackStatusText">Downloading...</span>
+                <span id="assetPackPercentText" style="color: var(--accent-blue);">0%</span>
+              </div>
+              <div class="progress-track" style="height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden;">
+                <div id="assetPackProgressBar" style="width: 0%; height: 100%; background: var(--accent-blue); transition: width 0.3s ease;"></div>
+              </div>
+            </div>
+            <div id="assetPackDownloadStatus" class="asset-status-text mt-1"></div>
 
             <div class="setting-action-block mt-3 border-top pt-2">
               <div>
@@ -525,15 +534,15 @@
           </div>
           <div class="settings-card-body">
             <p class="settings-desc">
-              Synchronize the master database with Crimson Ceremony to check for newly added demo entries or updated metadata.
+              DEMOSCENE maintains its own verified master catalog. Check Crimson Ceremony for newly added demo releases after February 2026 without altering existing catalog data.
             </p>
 
             <div class="setting-action-block mt-3">
               <div>
-                <strong>Re-Sync Demo Pals Archive</strong>
-                <p class="text-muted" style="font-size: 11px;">Scrapes all 19 magazine sections in the background</p>
+                <strong>Check for New Releases</strong>
+                <p class="text-muted" style="font-size: 11px;">Peeks at the changelog and imports only newly announced demo discs</p>
               </div>
-              <button class="ps-btn ps-btn-dark" id="btnSyncScrape">Start Sync</button>
+              <button class="ps-btn ps-btn-dark" id="btnSyncScrape">Check for Updates</button>
             </div>
             <div id="syncStatus" class="asset-status-text mt-1"></div>
           </div>
@@ -681,12 +690,56 @@
     </div>
   </div>
 
-  <!-- Zoom Modal -->
-  <div class="ps-modal-backdrop ps-zoom-backdrop" id="zoomModal" style="display: none;">
-    <div class="zoom-container">
-      <button class="ps-modal-close zoom-close" id="btnCloseZoom">✕</button>
-      <img id="zoomImage" src="" alt="Zoomed Scan" />
-      <div class="zoom-caption" id="zoomCaption"></div>
+  <!-- Welcome / Setup Wizard Modal -->
+  <div class="ps-modal-backdrop" id="welcomeWizardModal" style="display: none; z-index: 9999;">
+    <div class="ps-modal ps-modal-md" style="max-width: 580px;">
+      <div class="ps-modal-header" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <span class="tag-badge tag-ps1">PS1</span>
+          <span class="tag-badge tag-ps2">PS2</span>
+          <span class="tag-badge" style="background: rgba(255,255,255,0.08);">SETUP WIZARD</span>
+        </div>
+        <h2 style="font-size: 20px; margin: 4px 0 0; color: #fff; font-family: var(--font-display); letter-spacing: 0.5px;">Welcome to DEMOSCENE</h2>
+        <p style="color: var(--text-muted); font-size: 13px; margin: 0;">PlayStation PAL Demo Disc Collector &amp; Archive</p>
+      </div>
+
+      <div class="ps-modal-body" style="padding: 16px 20px;">
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; display: flex; gap: 12px; align-items: flex-start;">
+          <div style="font-size: 24px; line-height: 1;">💿</div>
+          <div>
+            <strong style="color: var(--text-main); font-size: 13px; display: block; margin-bottom: 2px;">Master Catalog Pre-Loaded</strong>
+            <span style="font-size: 12px; color: var(--text-muted); line-height: 1.4; display: block;">
+              <strong>872 verified PAL demo discs</strong> are indexed and ready for offline collection tracking.
+            </span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 12px; align-items: flex-start; margin-bottom: 12px;">
+          <div style="font-size: 24px; line-height: 1;">🖼️</div>
+          <div>
+            <strong style="color: var(--text-main); font-size: 13px; display: block; margin-bottom: 2px;">Offline Artwork &amp; Scans Pack</strong>
+            <span style="font-size: 12px; color: var(--text-muted); line-height: 1.4; display: block;">
+              To display all 4,500+ high-resolution disc scans, slipcases, and regional flags offline, download the pre-packaged bundle directly from the GitHub Releases CDN (~590 MB).
+            </span>
+          </div>
+        </div>
+
+        <!-- Wizard Progress Bar -->
+        <div id="wizardProgressContainer" style="display: none; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; margin-top: 12px;">
+          <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 6px; font-weight: 600;">
+            <span id="wizardStatusText" style="color: var(--text-main);">Connecting to CDN...</span>
+            <span id="wizardPercentText" style="color: var(--accent-blue);">0%</span>
+          </div>
+          <div class="progress-track" style="height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden;">
+            <div id="wizardProgressBar" style="width: 0%; height: 100%; background: var(--accent-blue); transition: width 0.3s ease;"></div>
+          </div>
+        </div>
+
+        <div class="modal-actions mt-3" style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border-color); padding-top: 14px;">
+          <button class="ps-btn" id="btnWizardSkip">Skip for Now</button>
+          <button class="ps-btn ps-btn-dark" id="btnWizardDownload">📦 Download Artwork Pack (~590 MB)</button>
+        </div>
+      </div>
     </div>
   </div>
 

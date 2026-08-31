@@ -109,6 +109,17 @@ def init_db(db_path: str = None) -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_demos_title ON demos(title)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_collection_status ON collection(status)")
 
+    # System metadata & sync watermark tracking
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS sync_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+    cur.execute("INSERT OR IGNORE INTO sync_metadata (key, value) VALUES ('last_synced_date', '2026.02.11')")
+    cur.execute("INSERT OR IGNORE INTO sync_metadata (key, value) VALUES ('last_check_timestamp', '')")
+
     # Migration for Dedicated Demos or single-game discs with empty contents_json
     cur.execute("SELECT id, title, section_name, contents_json FROM demos WHERE contents_json = '{}' OR contents_json IS NULL OR contents_json = ''")
     empty_rows = cur.fetchall()
@@ -132,6 +143,93 @@ def init_db(db_path: str = None) -> None:
     WHERE primary_thumbnail LIKE 'http://crimson-ceremony.net/demopals/%'
     """)
 
+    conn.commit()
+    conn.close()
+
+    # Automatically seed master catalog if database is fresh/empty
+    seed_database_if_empty(db_path)
+
+
+def seed_database_if_empty(db_path: str = None, seed_file: str = None) -> int:
+    """Populate SQLite database from version-controlled master seed (catalog_seed.json) if empty."""
+    conn = get_db_connection(db_path)
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM demos")
+    count = cur.fetchone()[0]
+
+    if count > 0:
+        conn.close()
+        return count
+
+    seed_path = seed_file or os.path.join(settings.DATA_DIR, "catalog_seed.json")
+    if not os.path.exists(seed_path):
+        conn.close()
+        return 0
+
+    inserted = 0
+    try:
+        with open(seed_path, "r", encoding="utf-8") as f:
+            demos_seed = json.load(f)
+
+        for demo in demos_seed:
+            contents = demo.get("categories", {})
+            playable_games = contents.get("Playable", [])
+            game_names_index = demo.get("game_names_index") or " | ".join(playable_games).lower()
+
+            cur.execute("""
+            INSERT OR REPLACE INTO demos (
+                id, console, section_group, section_name, section_url,
+                title, catalog_line, sced_codes_json, notes,
+                contents_json, variants_json, primary_thumbnail,
+                game_names_index, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (
+                demo["id"],
+                demo["console"],
+                demo["section_group"],
+                demo["section_name"],
+                demo["section_url"],
+                demo["title"],
+                demo.get("catalog_line", ""),
+                json.dumps(demo.get("sced_codes", [])),
+                demo.get("notes", ""),
+                json.dumps(contents),
+                json.dumps(demo.get("variants", [])),
+                normalize_asset_url(demo.get("primary_thumbnail", "")),
+                game_names_index
+            ))
+
+        conn.commit()
+        inserted = len(demos_seed)
+        print(f"✓ Seeded {inserted} master demo records into database from {seed_path}")
+    except Exception as e:
+        conn.rollback()
+        print(f"⚠️ Error seeding catalog from {seed_path}: {e}")
+        inserted = 0
+    finally:
+        conn.close()
+
+    return inserted
+
+
+def get_metadata(key: str, default: str = "", db_path: str = None) -> str:
+    """Retrieve system metadata / sync watermark value."""
+    conn = get_db_connection(db_path)
+    cur = conn.cursor()
+    cur.execute("SELECT value FROM sync_metadata WHERE key = ?", (key,))
+    row = cur.fetchone()
+    conn.close()
+    return row["value"] if row else default
+
+
+def set_metadata(key: str, value: str, db_path: str = None) -> None:
+    """Update or insert system metadata / sync watermark value."""
+    conn = get_db_connection(db_path)
+    cur = conn.cursor()
+    cur.execute("""
+    INSERT INTO sync_metadata (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=CURRENT_TIMESTAMP
+    """, (key, value))
     conn.commit()
     conn.close()
 

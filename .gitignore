@@ -39,6 +39,7 @@ data/assets/boxart/*
 *.tar.gz
 *.zip
 *.log
+data/backups/
 ps-demo-collection-backup-*.json
 
 # OS & Editor specific files

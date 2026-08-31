@@ -29,12 +29,9 @@ def main():
     settings.ensure_dirs()
     ip = get_local_ip()
 
-    # Initialize DB & scrape if empty
+    # Initialize DB (auto-seeds master catalog if fresh)
     db.init_db()
     stats = db.get_stats()
-    if stats["total_demos"] == 0:
-        print("Initial database setup: scraping Crimson Ceremony archive...")
-        scraper.run_scraper(verbose=True)
 
     print("\n" + "═" * 60)
     print("DEMOSCENE - PlayStation Demo Collector")

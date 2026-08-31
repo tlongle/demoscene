@@ -160,3 +160,168 @@ def test_download_demo_assets_with_none_flag_and_path_resolution():
     assert len(res["variants"]) == 2
 
 
+def test_catalog_seeding_on_empty_db(tmp_path):
+    """Verify an empty database automatically seeds 872 verified discs from catalog_seed.json."""
+    from app.core.database import init_db, seed_database_if_empty, get_stats
+
+    temp_db = str(tmp_path / "test_empty.db")
+    init_db(temp_db)
+
+    stats = get_stats(temp_db)
+    assert stats["total_demos"] == 872
+    assert stats["total_ps1"] > 0
+    assert stats["total_ps2"] > 0
+
+
+def test_scraper_anomaly_gate_rejects_malformed_data():
+    """Verify the integrity gate blocks corrupt scrapes (e.g. only 19 discs or 100+ games per disc)."""
+    from app.services.scraper import validate_scraped_entries
+
+    # 1. Reject too few discs (e.g. 19 discs)
+    fake_few_demos = [{"id": f"demo_{i}", "categories": {"Playable": ["Game 1"]}} for i in range(19)]
+    is_valid, msg = validate_scraped_entries(fake_few_demos, min_expected=800)
+    assert not is_valid
+    assert "Parsed only 19" in msg
+
+    # 2. Reject disc with collapsed block of 100+ games
+    fake_bloated_demos = [{"id": f"demo_{i}", "categories": {"Playable": [f"Game {j}" for j in range(100)]}} for i in range(850)]
+    is_valid, msg = validate_scraped_entries(fake_bloated_demos, min_expected=800)
+    assert not is_valid
+    assert "parsed with 100 items" in msg
+
+    # 3. Accept valid dataset
+    fake_valid_demos = [{"id": f"demo_{i}", "categories": {"Playable": ["Game A", "Game B"]}} for i in range(872)]
+    is_valid, msg = validate_scraped_entries(fake_valid_demos, min_expected=800)
+    assert is_valid
+
+
+def test_differential_merge_preserves_collection(tmp_path):
+    """Verify differential sync preserves existing user collection statuses and custom condition notes."""
+    from app.core.database import init_db, update_collection, get_db_connection
+    from app.services.scraper import differential_merge_demos
+
+    temp_db = str(tmp_path / "test_merge.db")
+    init_db(temp_db)
+
+    # User marks a demo as owned with specific notes
+    target_demo_id = "ps1_euro_demo__the-official-playstation-magazine-cd-1__sles-00107"
+    update_collection(
+        demo_id=target_demo_id,
+        variant_id="default",
+        status="owned",
+        condition="mint",
+        notes="Precious mint condition find",
+        db_path=temp_db
+    )
+
+    # Scraper runs differential sync with a simulated new batch
+    simulated_scraped = [
+        {
+            "id": target_demo_id,
+            "console": "PS1",
+            "section_group": "OPM demos",
+            "section_name": "Euro Demo",
+            "section_url": "https://crimson-ceremony.net/demopals/eurodemo/index.php",
+            "title": "The Official PlayStation Magazine CD 1",
+            "catalog_line": "SCES-00107",
+            "sced_codes": ["SCES-00107", "NEW-SCED-999"],
+            "notes": "Original archive notes",
+            "categories": {"Playable": ["Tomb Raider"]},
+            "variants": [],
+            "primary_thumbnail": "/assets/demopals/eurodemo/uk001-1.jpg"
+        }
+    ]
+
+    res = differential_merge_demos(simulated_scraped, db_path=temp_db)
+    assert res["updated"] == 1
+
+    # Check collection status is still intact
+    conn = get_db_connection(temp_db)
+    cur = conn.cursor()
+    cur.execute("SELECT status, condition, notes FROM collection WHERE demo_id = ?", (target_demo_id,))
+    row = cur.fetchone()
+    conn.close()
+
+    assert row["status"] == "owned"
+    assert row["condition"] == "mint"
+    assert row["notes"] == "Precious mint condition find"
+
+
+def test_sync_metadata_tracking(tmp_path):
+    """Verify sync watermark metadata storage and retrieval."""
+    from app.core.database import init_db, get_metadata, set_metadata
+
+    temp_db = str(tmp_path / "test_meta.db")
+    init_db(temp_db)
+
+    # Initial watermark set to 2026.02.11
+    assert get_metadata("last_synced_date", db_path=temp_db) == "2026.02.11"
+
+    # Update metadata
+    set_metadata("last_synced_date", "2026.09.01", db_path=temp_db)
+    assert get_metadata("last_synced_date", db_path=temp_db) == "2026.09.01"
+
+
+def test_peek_for_updates_when_already_up_to_date(tmp_path, monkeypatch):
+    """Verify peek_and_sync_updates completes cleanly without modifying database when no new releases exist."""
+    from app.core.database import init_db
+    from app.services.scraper import peek_and_sync_updates
+
+    temp_db = str(tmp_path / "test_peek.db")
+    init_db(temp_db)
+
+    # Simulate HTML response where newest date is 2026.02.11 (matches baseline)
+    mock_html = """
+    <html>
+      <body>
+        <section>
+          <h2>2026.02.11</h2>
+          <ul class="varitem">
+            <li class="vartitle">PlayStation 2 Magazine CD 19<br><span class="red">SCED-50154</span></li>
+          </ul>
+        </section>
+      </body>
+    </html>
+    """
+
+    class MockResponse:
+        text = mock_html
+        status_code = 200
+        def raise_for_status(self): pass
+
+    import requests
+    monkeypatch.setattr(requests.Session, "get", lambda *args, **kwargs: MockResponse())
+
+    res = peek_and_sync_updates(db_path=temp_db, verbose=False)
+    assert res["status"] == "up_to_date"
+    assert res["new_discs_added"] == 0
+    assert "up to date" in res["message"]
+
+
+def test_asset_pack_status_and_download_flow(monkeypatch):
+    """Verify asset pack status endpoint and download trigger."""
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.services import asset_pack
+
+    client = TestClient(app)
+
+    # 1. Test pack status
+    res = client.get("/api/assets/pack/status")
+    assert res.status_code == 200
+    data = res.json()
+    assert "assets_ready" in data
+    assert "local_asset_count" in data
+    assert "is_downloading" in data
+    assert "default_url" in data
+
+    # 2. Test download trigger with monkeypatched worker
+    monkeypatch.setattr(asset_pack, "_run_download_and_extract", lambda url: None)
+    post_res = client.post("/api/assets/pack/download", json={"url": "https://example.com/test.tar.gz"})
+    assert post_res.status_code == 200
+    assert post_res.json()["success"] is True
+
+
+
+
+
