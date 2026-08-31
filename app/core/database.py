@@ -354,56 +354,6 @@ def resolve_demo_assets(demo: Dict[str, Any]) -> Dict[str, Any]:
     return demo
 
 
-def save_demo(demo_data: Dict[str, Any], db_path: str = None) -> None:
-    """Insert or update a scraped demo entry."""
-    conn = get_db_connection(db_path)
-    cur = conn.cursor()
-
-    all_games = []
-    contents = demo_data.get("categories", {})
-    for cat_games in contents.values():
-        all_games.extend(cat_games)
-    game_names_index = " | ".join(all_games).lower()
-
-    cur.execute("""
-    INSERT INTO demos (
-        id, console, section_group, section_name, section_url,
-        title, catalog_line, sced_codes_json, notes,
-        contents_json, variants_json, primary_thumbnail,
-        game_names_index, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(id) DO UPDATE SET
-        console=excluded.console,
-        section_group=excluded.section_group,
-        section_name=excluded.section_name,
-        section_url=excluded.section_url,
-        title=excluded.title,
-        catalog_line=excluded.catalog_line,
-        sced_codes_json=excluded.sced_codes_json,
-        notes=excluded.notes,
-        contents_json=excluded.contents_json,
-        variants_json=excluded.variants_json,
-        primary_thumbnail=excluded.primary_thumbnail,
-        game_names_index=excluded.game_names_index,
-        updated_at=CURRENT_TIMESTAMP
-    """, (
-        demo_data["id"],
-        demo_data["console"],
-        demo_data["section_group"],
-        demo_data["section_name"],
-        demo_data["section_url"],
-        demo_data["title"],
-        demo_data.get("catalog_line", ""),
-        json.dumps(demo_data.get("sced_codes", [])),
-        demo_data.get("notes", ""),
-        json.dumps(demo_data.get("categories", {})),
-        json.dumps(demo_data.get("variants", [])),
-        demo_data.get("primary_thumbnail", ""),
-        game_names_index
-    ))
-
-    conn.commit()
-    conn.close()
 
 
 def save_demos_bulk(demos_list: List[Dict[str, Any]], db_path: str = None) -> int:

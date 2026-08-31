@@ -283,11 +283,6 @@ def trigger_scrape():
     }
 
 
-@app.post("/api/assets/download-all", dependencies=[Depends(verify_admin_key)])
-def trigger_assets_download(background_tasks: BackgroundTasks):
-    """Trigger offline download and caching of all disc photos and sleeve scans."""
-    background_tasks.add_task(download_assets.download_all_demopals_assets, max_workers=8, verbose=True)
-    return {"success": True, "message": "Offline scans download queued in background."}
 
 
 @app.post("/api/boxart/fetch-all", dependencies=[Depends(verify_admin_key)])

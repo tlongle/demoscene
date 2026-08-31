@@ -250,8 +250,6 @@ const elements = {
   assetPackPercentText: document.getElementById("assetPackPercentText"),
   assetPackProgressBar: document.getElementById("assetPackProgressBar"),
   assetPackDownloadStatus: document.getElementById("assetPackDownloadStatus"),
-  btnDownloadScans: document.getElementById("btnDownloadScans"),
-  scansDownloadStatus: document.getElementById("scansDownloadStatus"),
   btnFetchBoxart: document.getElementById("btnFetchBoxart"),
   boxartFetchStatus: document.getElementById("boxartFetchStatus"),
   btnExportJson: document.getElementById("btnExportJson"),
@@ -1524,7 +1522,6 @@ function setupSettingsListeners() {
   if (elements.btnDownloadAssetPack) {
     elements.btnDownloadAssetPack.addEventListener("click", () => startAssetPackDownload(false));
   }
-  elements.btnDownloadScans.addEventListener("click", handleDownloadScans);
   elements.btnFetchBoxart.addEventListener("click", handleFetchBoxart);
   elements.btnExportJson.addEventListener("click", handleExportBackup);
   elements.btnImportJson.addEventListener("click", () => elements.importFileInput.click());
@@ -1737,16 +1734,6 @@ async function checkWelcomeWizard() {
   }
 }
 
-async function handleDownloadScans() {
-  elements.btnDownloadScans.disabled = true;
-  elements.scansDownloadStatus.textContent = "Scans download running in background...";
-  try {
-    await apiFetch(`${API_BASE}/api/assets/download-all`, { method: "POST" });
-    elements.scansDownloadStatus.textContent = "Download queued! Scans are caching to volume in background.";
-  } catch (err) {
-    elements.scansDownloadStatus.textContent = "Failed to queue download.";
-  }
-}
 
 async function handleFetchBoxart() {
   elements.btnFetchBoxart.disabled = true;
