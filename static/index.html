@@ -691,9 +691,10 @@
   </div>
 
   <!-- Welcome / Setup Wizard Modal -->
-  <div class="ps-modal-backdrop" id="welcomeWizardModal" style="display: none; z-index: 9999;">
+  <div class="ps-modal-backdrop" id="welcomeWizardModal" style="display: none;">
     <div class="ps-modal ps-modal-md" style="max-width: 580px;">
-      <div class="ps-modal-header" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+      <div class="ps-modal-header" style="flex-direction: column; align-items: flex-start; gap: 6px; position: relative;">
+        <button class="ps-modal-close" id="btnCloseWizard" style="position: absolute; top: 12px; right: 12px;">✕</button>
         <div style="display: flex; gap: 6px; align-items: center;">
           <span class="tag-badge tag-ps1">PS1</span>
           <span class="tag-badge tag-ps2">PS2</span>

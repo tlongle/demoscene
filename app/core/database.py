@@ -235,13 +235,17 @@ def set_metadata(key: str, value: str, db_path: str = None) -> None:
 
 
 def normalize_asset_url(url: Optional[str]) -> Optional[str]:
-    """Convert remote Crimson Ceremony URLs to local /assets/demopals/ paths."""
+    """Convert remote Crimson Ceremony URLs and relative flag URLs to local /assets/demopals/ paths."""
     if not url or not isinstance(url, str):
+        return url
+    if url.startswith("/assets/"):
         return url
     if "crimson-ceremony.net/demopals/" in url:
         return "/assets/demopals/" + url.split("demopals/", 1)[1]
     if "crimson-ceremony.net/f-" in url:
         return "/assets/demopals/" + url.split("crimson-ceremony.net/", 1)[1]
+    if url.startswith("/f-") or url.startswith("f-"):
+        return "/assets/demopals/" + url.lstrip("/")
     return url
 
 

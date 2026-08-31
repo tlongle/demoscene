@@ -46,11 +46,15 @@ function getShortRegionCode(countryStr, fallback = "") {
 
 function resolveAssetUrl(url) {
   if (!url || typeof url !== "string") return "/assets/demopals/f-eur.jpg";
+  if (url.startsWith("/assets/")) return url;
   if (url.includes("crimson-ceremony.net/demopals/")) {
     return "/assets/demopals/" + url.split("demopals/")[1];
   }
   if (url.includes("crimson-ceremony.net/f-")) {
     return "/assets/demopals/" + url.split("crimson-ceremony.net/")[1];
+  }
+  if (url.startsWith("/f-") || url.startsWith("f-")) {
+    return "/assets/demopals/" + url.replace(/^\/+/, "");
   }
   return url;
 }
@@ -263,6 +267,7 @@ const elements = {
 
   // Modals & Wizard
   welcomeWizardModal: document.getElementById("welcomeWizardModal"),
+  btnCloseWizard: document.getElementById("btnCloseWizard"),
   btnWizardDownload: document.getElementById("btnWizardDownload"),
   btnWizardSkip: document.getElementById("btnWizardSkip"),
   wizardProgressContainer: document.getElementById("wizardProgressContainer"),
@@ -1698,17 +1703,20 @@ function setupWizardListeners() {
   if (elements.btnWizardSkip) {
     elements.btnWizardSkip.addEventListener("click", closeWelcomeWizard);
   }
+  if (elements.btnCloseWizard) {
+    elements.btnCloseWizard.addEventListener("click", closeWelcomeWizard);
+  }
 }
 
 function openWelcomeWizard() {
   if (elements.welcomeWizardModal) {
-    elements.welcomeWizardModal.style.display = "flex";
+    openModal(elements.welcomeWizardModal);
   }
 }
 
 function closeWelcomeWizard() {
   if (elements.welcomeWizardModal) {
-    elements.welcomeWizardModal.style.display = "none";
+    closeModal(elements.welcomeWizardModal);
   }
   localStorage.setItem("demoscene_wizard_dismissed", "true");
 }
@@ -1844,8 +1852,29 @@ async function loadArchiveFilters() {
 }
 
 function setupModalListeners() {
-  elements.btnCloseDetail.addEventListener("click", () => closeModal(elements.detailModal));
-  elements.btnCloseZoom.addEventListener("click", () => closeModal(elements.zoomModal));
+  if (elements.btnCloseDetail) {
+    elements.btnCloseDetail.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeModal(elements.detailModal);
+    });
+  }
+  if (elements.btnCloseZoom) {
+    elements.btnCloseZoom.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeModal(elements.zoomModal);
+    });
+  }
+
+  // Universal close for any element with .ps-modal-close class
+  document.querySelectorAll(".ps-modal-close").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const backdrop = btn.closest(".ps-modal-backdrop");
+      if (backdrop) {
+        closeModal(backdrop);
+      }
+    });
+  });
 
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
