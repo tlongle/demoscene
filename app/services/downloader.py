@@ -2,19 +2,12 @@
 Crimson Ceremony Asset Downloader & Offline Cache Pipeline.
 Downloads all disc scans, slipcases, inlays, and variant covers locally into data/assets/demopals.
 """
-import os
-import re
-import json
-import time
-import requests
+from pathlib import Path
 from urllib.parse import urlparse, urljoin
 from typing import Dict, Any, List, Optional
-from concurrent.futures import ThreadPoolExecutor
+import requests
 
 from app.core.config import settings
-from app.core.database import get_db_connection
-
-from pathlib import Path, PurePosixPath
 
 SESSION = requests.Session()
 SESSION.headers.update({

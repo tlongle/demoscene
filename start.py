@@ -3,14 +3,11 @@
 Starter script for PlayStation Demo Collector (DEMOSCENE).
 Initializes database if needed and launches the web app.
 """
-import os
-import sys
 import socket
 import uvicorn
 
 from app.core.config import settings
 from app.core import database as db
-from app.services import scraper
 
 
 def get_local_ip() -> str:
@@ -31,7 +28,6 @@ def main():
 
     # Initialize DB (auto-seeds master catalog if fresh)
     db.init_db()
-    stats = db.get_stats()
 
     print("\n" + "═" * 60)
     print("DEMOSCENE - PlayStation Demo Collector")

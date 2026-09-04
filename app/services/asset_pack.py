@@ -28,15 +28,8 @@ _STATUS = {
 
 def count_local_assets() -> int:
     """Count local artwork images in settings.DEMOPALS_ASSETS_DIR."""
-    assets_path = Path(settings.DEMOPALS_ASSETS_DIR)
-    if not assets_path.exists():
-        return 0
-    count = 0
-    for root, _, files in os.walk(assets_path):
-        for f in files:
-            if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
-                count += 1
-    return count
+    p = Path(settings.DEMOPALS_ASSETS_DIR)
+    return sum(1 for _ in p.rglob("*.*")) if p.exists() else 0
 
 
 def get_asset_pack_status() -> Dict[str, Any]:

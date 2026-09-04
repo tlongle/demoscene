@@ -5,6 +5,7 @@ Handles SQLite storage for scraped demo discs, assets, and user collection state
 import sqlite3
 import json
 import os
+import re
 from typing import List, Dict, Any, Optional
 
 from app.core.config import settings
@@ -103,10 +104,42 @@ def init_db(db_path: str = None) -> None:
         cur.execute("DROP TABLE game_covers")
         cur.execute("ALTER TABLE game_covers_new RENAME TO game_covers")
 
+    # Users and sessions tables for username/password authentication
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL COLLATE NOCASE,
+        password_hash TEXT NOT NULL,
+        salt TEXT NOT NULL,
+        is_admin INTEGER NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS user_sessions (
+        token TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sessions_token ON user_sessions(token)")
+
+    # Migration for demos table: add source and redump_id columns if missing
+    cur.execute("PRAGMA table_info(demos)")
+    demo_cols = [c["name"] for c in cur.fetchall()]
+    if "source" not in demo_cols:
+        cur.execute("ALTER TABLE demos ADD COLUMN source TEXT NOT NULL DEFAULT 'crimson'")
+    if "redump_id" not in demo_cols:
+        cur.execute("ALTER TABLE demos ADD COLUMN redump_id INTEGER")
+
     # Indexes for lightning-fast search
     cur.execute("CREATE INDEX IF NOT EXISTS idx_demos_console ON demos(console)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_demos_section ON demos(section_name)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_demos_title ON demos(title)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_demos_source ON demos(source)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_collection_status ON collection(status)")
 
     # System metadata & sync watermark tracking
@@ -811,3 +844,157 @@ def get_collection_games(db_path: str = None) -> List[Dict[str, Any]]:
                         })
 
     return sorted(list(games_map.values()), key=lambda x: x["name"].lower())
+
+
+def make_demo_id(console: str, section_name: str, title: str, sced_or_catalog: str) -> str:
+    """Generate a clean, deterministic unique ID for a demo disc."""
+    clean_section = re.sub(r"[^\w\-]", "_", (section_name or "").strip().lower())
+    clean_title = re.sub(r"[^\w\-]", "-", (title or "").strip().lower())
+    clean_code = re.sub(r"[^\w\-]", "-", (sced_or_catalog or "").strip().lower()) or "demo"
+    return f"{console.lower()}_{clean_section}__{clean_title}__{clean_code}"[:120]
+
+
+def create_manual_demo(demo_data: Dict[str, Any], db_path: str = None) -> Dict[str, Any]:
+    """Create a new custom or Redump demo entry in the catalog."""
+    title = demo_data["title"].strip()
+    console = demo_data.get("console", "PS2").upper().strip()
+    sec_name = demo_data.get("section_name", "Community Demos").strip()
+    sceds = demo_data.get("sced_codes", [])
+    if isinstance(sceds, str):
+        sceds = [s.strip() for s in sceds.split(",") if s.strip()]
+    sced_primary = sceds[0] if sceds else "custom"
+    
+    demo_id = make_demo_id(console, sec_name, title, sced_primary)
+
+    raw_cats = demo_data.get("categories", {})
+    categories = ensure_demo_categories(title, raw_cats, sec_name)
+    game_names_index = " | ".join(g for games in categories.values() for g in games).lower()
+
+    variants = demo_data.get("variants", [])
+    if not variants and sceds:
+        variants = [{
+            "country": demo_data.get("country", "Europe"),
+            "sced": sced_primary,
+            "img_key": "",
+            "thumb_img": "",
+            "flag_icon": "/assets/demopals/f-eur.jpg",
+            "scans": []
+        }]
+
+    source = demo_data.get("source", "manual")
+    redump_id = demo_data.get("redump_id")
+    primary_thumb = demo_data.get("primary_thumbnail", "")
+    if not primary_thumb:
+        primary_thumb = f"/assets/demopals/placeholder_{console.lower()}.png"
+
+    conn = get_db_connection(db_path)
+    cur = conn.cursor()
+    cur.execute("""
+    INSERT INTO demos (
+        id, console, section_group, section_name, section_url,
+        title, catalog_line, sced_codes_json, notes,
+        contents_json, variants_json, primary_thumbnail,
+        game_names_index, source, redump_id, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(id) DO UPDATE SET
+        title = excluded.title,
+        catalog_line = excluded.catalog_line,
+        sced_codes_json = excluded.sced_codes_json,
+        contents_json = excluded.contents_json,
+        variants_json = excluded.variants_json,
+        primary_thumbnail = excluded.primary_thumbnail,
+        game_names_index = excluded.game_names_index,
+        notes = excluded.notes,
+        source = excluded.source,
+        redump_id = excluded.redump_id,
+        updated_at = CURRENT_TIMESTAMP
+    """, (
+        demo_id,
+        console,
+        demo_data.get("section_group", "Community / Redump"),
+        sec_name,
+        demo_data.get("section_url", ""),
+        title,
+        sced_primary,
+        json.dumps(sceds),
+        demo_data.get("notes", ""),
+        json.dumps(categories),
+        json.dumps(variants),
+        primary_thumb,
+        game_names_index,
+        source,
+        redump_id
+    ))
+    conn.commit()
+    conn.close()
+
+    return get_demo(demo_id, db_path=db_path)
+
+
+def update_demo(demo_id: str, updates: Dict[str, Any], db_path: str = None) -> Optional[Dict[str, Any]]:
+    """Update metadata, playable games, notes, or artwork for an existing disc."""
+    current = get_demo(demo_id, db_path=db_path)
+    if not current:
+        return None
+
+    title = updates.get("title", current["title"]).strip()
+    console = updates.get("console", current["console"]).upper().strip()
+    sec_name = updates.get("section_name", current["section_name"]).strip()
+    notes = updates.get("notes", current.get("notes", ""))
+    primary_thumb = updates.get("primary_thumbnail", current.get("primary_thumbnail", ""))
+
+    sceds = updates.get("sced_codes", current.get("sced_codes", []))
+    if isinstance(sceds, str):
+        sceds = [s.strip() for s in sceds.split(",") if s.strip()]
+
+    raw_cats = updates.get("categories", current.get("categories", {}))
+    categories = ensure_demo_categories(title, raw_cats, sec_name)
+    all_games = []
+    for cat_games in categories.values():
+        all_games.extend(cat_games)
+    game_names_index = " | ".join(all_games).lower()
+
+    variants = updates.get("variants", current.get("variants", []))
+
+    conn = get_db_connection(db_path)
+    cur = conn.cursor()
+    cur.execute("""
+    UPDATE demos SET
+        title = ?,
+        console = ?,
+        section_name = ?,
+        sced_codes_json = ?,
+        contents_json = ?,
+        variants_json = ?,
+        primary_thumbnail = ?,
+        game_names_index = ?,
+        notes = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+    """, (
+        title,
+        console,
+        sec_name,
+        json.dumps(sceds),
+        json.dumps(categories),
+        json.dumps(variants),
+        primary_thumb,
+        game_names_index,
+        notes,
+        demo_id
+    ))
+    conn.commit()
+    conn.close()
+
+    return get_demo(demo_id, db_path=db_path)
+
+
+def delete_demo(demo_id: str, db_path: str = None) -> bool:
+    """Delete a demo disc and cascade collection tracking records."""
+    conn = get_db_connection(db_path)
+    cur = conn.cursor()
+    cur.execute("DELETE FROM demos WHERE id = ?", (demo_id,))
+    deleted = cur.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted

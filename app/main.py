@@ -2,53 +2,85 @@
 FastAPI Server for PlayStation Demo Collector (DEMOSCENE).
 Supports Docker containerization, Nginx reverse proxy, Cloudflare Tunnels, and local asset caching.
 """
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, Depends, Security
+from contextlib import asynccontextmanager
+from typing import Optional, List, Dict, Any
+import base64
+import json
+import secrets
+
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, Depends, Security, Request, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
-import os
-import json
-import secrets
 
 from app.core.config import settings
 import app.core.database as db
+from app.core import auth
 from app.services import scraper
 from app.services import intel as game_intel
 from app.services import downloader as download_assets
 from app.services import boxart as boxart_service
 from app.services import asset_pack
+from app.services import redump as redump_service
+from app.services import uploads as upload_service
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
-def verify_admin_key(api_key: Optional[str] = Security(api_key_header)):
-    """
-    Verify admin API key for mutating/sensitive operations using constant-time comparison.
-    If ADMIN_API_KEY is not configured in settings, allows open access for local development.
-    """
-    configured_key = settings.ADMIN_API_KEY
-    if not configured_key:
-        return True
-    if not api_key or not secrets.compare_digest(api_key.strip(), configured_key):
-        raise HTTPException(
-            status_code=401,
-            detail="Admin authentication required. Please configure a valid API Key."
-        )
-    return True
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize directories and database on startup."""
+    settings.ensure_dirs()
+    db.init_db()
+    yield
 
 
 app = FastAPI(
     title="DEMOSCENE",
     description="Track and archive PS1 & PS2 demo discs, disc scans, slipcases, and box art",
-    version="2.0.0"
+    version="2.0.0",
+    lifespan=lifespan
 )
 
 # Safe CORS policy
 origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
 if not origins or "*" in origins:
     origins = ["*"]
+
+
+async def verify_admin_key(
+    request: Request,
+    api_key: Optional[str] = Security(api_key_header),
+    user: Optional[Dict[str, Any]] = Depends(auth.get_current_user_optional)
+):
+    """
+    Verify administrator access via:
+    1. Active user session (Cookie / Bearer / X-Session-Token)
+    2. Admin API key header (legacy / CLI / test fallback)
+    3. Open local access if no users created and no ADMIN_API_KEY set
+    """
+    if user and user.get("is_admin"):
+        return user
+
+    configured_key = settings.ADMIN_API_KEY
+    if configured_key:
+        if api_key and secrets.compare_digest(api_key.strip(), configured_key):
+            return {"id": 0, "username": "admin_key", "is_admin": True}
+        raise HTTPException(
+            status_code=401,
+            detail="Admin authentication required. Please log in."
+        )
+
+    # If no users have been registered yet, allow setup/local access
+    if auth.count_users() == 0:
+        return {"id": 0, "username": "local_dev", "is_admin": True}
+
+    raise HTTPException(
+        status_code=401,
+        detail="Admin authentication required. Please log in."
+    )
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -90,15 +122,111 @@ class ImportPayload(BaseModel):
     collection: List[Dict[str, Any]]
 
 
-@app.get("/api/auth-status")
-def get_auth_status(api_key: Optional[str] = Security(api_key_header)):
-    """Check if admin key is configured and if provided key is valid."""
-    is_required = bool(settings.ADMIN_API_KEY)
-    is_authenticated = (not is_required) or (bool(api_key) and secrets.compare_digest(api_key.strip(), settings.ADMIN_API_KEY))
+class LoginPayload(BaseModel):
+    username: str
+    password: str
+
+
+class SetupPayload(BaseModel):
+    username: str
+    password: str
+
+
+class ManualDemoPayload(BaseModel):
+    title: str
+    console: str = "PS2"
+    section_name: Optional[str] = "Community Demos"
+    sced_codes: Optional[List[str]] = []
+    country: Optional[str] = "Europe"
+    categories: Optional[Dict[str, List[str]]] = {}
+    notes: Optional[str] = ""
+    primary_thumbnail: Optional[str] = ""
+
+
+class UpdateDemoPayload(BaseModel):
+    title: Optional[str] = None
+    console: Optional[str] = None
+    section_name: Optional[str] = None
+    sced_codes: Optional[List[str]] = None
+    categories: Optional[Dict[str, List[str]]] = None
+    notes: Optional[str] = None
+    primary_thumbnail: Optional[str] = None
+
+
+class RedumpImportPayload(BaseModel):
+    redump_id: int
+    custom_title: Optional[str] = None
+    playable_games: Optional[List[str]] = None
+    notes: Optional[str] = None
+
+
+class ScanUploadPayload(BaseModel):
+    image_base64: str
+    filename: Optional[str] = "scan.jpg"
+    scan_type: str = "cover_front"
+    variant_idx: int = 0
+
+
+@app.get("/api/auth/me")
+async def get_current_user_profile(user: Optional[Dict[str, Any]] = Depends(auth.get_current_user_optional)):
+    """Return active user profile and whether first-time setup is needed."""
+    user_count = auth.count_users()
     return {
-        "auth_required": is_required,
-        "authenticated": is_authenticated
+        "authenticated": user is not None,
+        "user": user,
+        "setup_needed": user_count == 0
     }
+
+
+@app.post("/api/auth/setup")
+async def setup_admin_account(payload: SetupPayload, response: Response):
+    """Initial setup wizard for Master Admin username & password."""
+    if auth.count_users() > 0:
+        raise HTTPException(status_code=400, detail="Setup already completed. Please log in.")
+    try:
+        user = auth.create_user(payload.username, payload.password, is_admin=True)
+        token = auth.create_session(user["id"])
+        response.set_cookie(
+            key="demoscene_session",
+            value=token,
+            max_age=30 * 86400,
+            httponly=True,
+            samesite="lax"
+        )
+        return {"success": True, "token": token, "user": user}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/auth/login")
+async def login_account(payload: LoginPayload, response: Response):
+    """Authenticate username and password, returning session token and cookie."""
+    user = auth.authenticate_user(payload.username, payload.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid username or password.")
+    token = auth.create_session(user["id"])
+    response.set_cookie(
+        key="demoscene_session",
+        value=token,
+        max_age=30 * 86400,
+        httponly=True,
+        samesite="lax"
+    )
+    return {"success": True, "token": token, "user": user}
+
+
+@app.post("/api/auth/logout")
+async def logout_account(
+    request: Request,
+    response: Response,
+    user: Optional[Dict[str, Any]] = Depends(auth.get_current_user_optional)
+):
+    """Invalidate active session and clear cookie."""
+    token = auth.extract_session_token(request)
+    if token:
+        auth.destroy_session(token)
+    response.delete_cookie("demoscene_session")
+    return {"success": True}
 
 
 @app.get("/api/settings")
@@ -117,13 +245,6 @@ def update_settings(payload: SettingsPayload):
     if not res["success"]:
         raise HTTPException(status_code=400, detail=res.get("error", "Failed to verify credentials"))
     return res
-
-
-@app.on_event("startup")
-def startup_event():
-    """Initialize DB and seed master catalog if empty."""
-    settings.ensure_dirs()
-    db.init_db()
 
 
 # Mount local assets for disc photos, slipcase scans, and box art
@@ -311,6 +432,76 @@ def download_asset_pack(payload: Optional[AssetPackDownloadPayload] = None):
     if not res["success"]:
         raise HTTPException(status_code=400, detail=res["message"])
     return res
+
+
+# ==========================================================================
+# Master Database Admin & Redump Endpoints
+# ==========================================================================
+@app.get("/api/admin/redump/search", dependencies=[Depends(verify_admin_key)])
+def search_redump_discs(q: str = Query(..., min_length=1), console: Optional[str] = None):
+    """Search Redump.org discs for PS1 and PS2."""
+    results = redump_service.search_redump(q, system_filter=console)
+    return {"query": q, "results": results}
+
+
+@app.post("/api/admin/redump/import", dependencies=[Depends(verify_admin_key)])
+def import_redump_disc(payload: RedumpImportPayload):
+    """1-Click import disc from Redump.org into master database."""
+    try:
+        demo = redump_service.import_redump_disc(
+            payload.redump_id,
+            custom_title=payload.custom_title,
+            playable_games=payload.playable_games,
+            notes=payload.notes
+        )
+        return {"success": True, "demo": demo}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/admin/demos", dependencies=[Depends(verify_admin_key)])
+def create_demo_entry(payload: ManualDemoPayload):
+    """Create a new manual demo disc entry."""
+    demo = db.create_manual_demo(payload.model_dump())
+    return {"success": True, "demo": demo}
+
+
+@app.put("/api/admin/demos/{demo_id}", dependencies=[Depends(verify_admin_key)])
+def update_demo_entry(demo_id: str, payload: UpdateDemoPayload):
+    """Update metadata for an existing disc."""
+    demo = db.update_demo(demo_id, payload.model_dump(exclude_unset=True))
+    if not demo:
+        raise HTTPException(status_code=404, detail="Demo disc not found")
+    return {"success": True, "demo": demo}
+
+
+@app.delete("/api/admin/demos/{demo_id}", dependencies=[Depends(verify_admin_key)])
+def delete_demo_entry(demo_id: str):
+    """Delete a demo disc from master database."""
+    success = db.delete_demo(demo_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Demo disc not found")
+    return {"success": True}
+
+
+@app.post("/api/admin/demos/{demo_id}/scans", dependencies=[Depends(verify_admin_key)])
+def upload_demo_scan(demo_id: str, payload: ScanUploadPayload):
+    """Upload a physical photo, scan, or slipcase image (Base64 data URL or raw Base64)."""
+    raw_b64 = payload.image_base64
+    if "," in raw_b64:
+        raw_b64 = raw_b64.split(",", 1)[1]
+    try:
+        content = base64.b64decode(raw_b64)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 image data")
+
+    return upload_service.save_demo_scan_bytes(
+        demo_id=demo_id,
+        content=content,
+        filename=payload.filename or "scan.jpg",
+        scan_type=payload.scan_type,
+        variant_idx=payload.variant_idx
+    )
 
 
 # Mount static files directory

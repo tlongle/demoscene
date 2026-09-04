@@ -50,14 +50,7 @@ SESSION.headers.update({
 })
 
 
-def make_demo_id(console: str, section_name: str, title: str, sced_or_catalog: str) -> str:
-    """Generate a clean, deterministic unique ID for a demo disc."""
-    clean_section = re.sub(r"[^\w\-]", "_", section_name.strip().lower())
-    clean_title = re.sub(r"[^\w\-]", "-", title.strip().lower())
-    clean_code = re.sub(r"[^\w\-]", "-", sced_or_catalog.strip().lower())
-    if not clean_code:
-        clean_code = "demo"
-    return f"{console.lower()}_{clean_section}__{clean_title}__{clean_code}"[:120]
+from app.core.database import make_demo_id
 
 
 def scrape_section_html(section: Dict[str, Any], verbose: bool = False) -> List[Dict[str, Any]]:
@@ -279,8 +272,8 @@ def differential_merge_demos(all_demos: List[Dict[str, Any]], db_path: str = Non
                 id, console, section_group, section_name, section_url,
                 title, catalog_line, sced_codes_json, notes,
                 contents_json, variants_json, primary_thumbnail,
-                game_names_index, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                game_names_index, source, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'crimson', CURRENT_TIMESTAMP)
             """, (
                 demo["id"],
                 demo["console"],
@@ -298,8 +291,12 @@ def differential_merge_demos(all_demos: List[Dict[str, Any]], db_path: str = Non
             ))
             inserted += 1
         else:
-            # Existing disc: only update if missing sced or variant scans
+            # Existing disc: shield non-crimson discs from overwrites
             existing = existing_rows[demo_id]
+            if existing.get("source") and existing["source"] != "crimson":
+                unchanged += 1
+                continue
+
             existing_sceds = json.loads(existing.get("sced_codes_json") or "[]")
             new_sceds = demo.get("sced_codes", [])
             merged_sceds = list(dict.fromkeys(existing_sceds + new_sceds))

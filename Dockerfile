@@ -10,12 +10,15 @@ ENV PORT=5363
 
 WORKDIR /app
 
+# Install uv binary from official Astral image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 # Install system curl for healthchecks
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
-# Install python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install python dependencies using uv (sub-second install)
+COPY requirements.txt pyproject.toml ./
+RUN uv pip install --system --no-cache -r requirements.txt
 
 # Copy application source code
 COPY . .

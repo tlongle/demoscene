@@ -39,17 +39,31 @@
         </div>
 
         <!-- Primary Top Navigation Tabs -->
-        <nav class="nav-tabs" id="mainNavTabs">
-          <button class="nav-tab active" data-page="archive" id="navTabArchive">
-            Archive <span class="nav-badge" id="navCountArchive">-</span>
-          </button>
-          <button class="nav-tab" data-page="collection" id="navTabCollection">
-            My Collection <span class="nav-badge count-owned" id="navCountOwned">0</span>
-          </button>
-          <button class="nav-tab" data-page="settings" id="navTabSettings">
-            Settings
-          </button>
-        </nav>
+        <div class="header-nav-wrap" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+          <nav class="nav-tabs" id="mainNavTabs">
+            <button class="nav-tab active" data-page="archive" id="navTabArchive">
+              Archive <span class="nav-badge" id="navCountArchive">-</span>
+            </button>
+            <button class="nav-tab" data-page="collection" id="navTabCollection">
+              My Collection <span class="nav-badge count-owned" id="navCountOwned">0</span>
+            </button>
+            <button class="nav-tab" data-page="admin" id="navTabAdmin" style="display: none;">
+              Admin Hub ⚙️
+            </button>
+            <button class="nav-tab" data-page="settings" id="navTabSettings">
+              Settings
+            </button>
+          </nav>
+
+          <!-- Auth Status / Log In Controls -->
+          <div class="auth-header-controls" id="authHeaderControls" style="display: flex; align-items: center; gap: 8px;">
+            <button class="ps-btn ps-btn-sm" id="btnOpenLoginModal">🔑 Log In</button>
+            <div id="userBadgeWrap" style="display: none; align-items: center; gap: 8px;">
+              <span class="tag-badge" id="lblUserBadge" style="background: var(--ps1-grey-panel); font-weight: 600;">👤 Admin</span>
+              <button class="ps-btn ps-btn-sm" id="btnHeaderLogout" title="Log Out">Log Out</button>
+            </div>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -548,26 +562,152 @@
           </div>
         </div>
 
-        <!-- CARD 5: Admin Security & Tunnel Access -->
+      </div>
+    </main>
+
+    <!-- =========================================================================
+         PAGE 4: ADMIN HUB (MASTER DATABASE & REDUMP INTEGRATION)
+         ========================================================================= -->
+    <main id="pageAdmin" class="page-view">
+      <div class="settings-grid">
+
+        <!-- CARD 1: Redump.org Live Disc Ingestion -->
+        <div class="settings-card" style="grid-column: 1 / -1;">
+          <div class="settings-card-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <h3>Redump.org Disc Discovery &amp; 1-Click Importer</h3>
+              <p class="text-muted" style="font-size: 12px; margin-top: 2px;">
+                Search the community preservation database for unindexed demo discs, regional variants, and promos (e.g. <em>"OPS2 Demo 54"</em>, <em>"Bonus Demo 08"</em>, or SCED serials).
+              </p>
+            </div>
+            <span class="tag-badge" style="background: var(--ps-cross); color: #fff;">REDUMP INTEGRATION</span>
+          </div>
+          <div class="settings-card-body">
+            <div style="display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;">
+              <input 
+                type="text" 
+                id="redumpSearchInput" 
+                class="ps-input" 
+                style="flex: 1; min-width: 260px;" 
+                placeholder="Enter disc title or serial (e.g. 'Bonus Demo 08', 'OPS2 Demo 54', 'SCED-54101')..." 
+              />
+              <select id="redumpConsoleSelect" class="ps-select" style="width: 120px;">
+                <option value="">All Systems</option>
+                <option value="PS2" selected>PS2</option>
+                <option value="PS1">PS1</option>
+              </select>
+              <button class="ps-btn ps-btn-dark" id="btnRedumpSearch">🔍 Search Redump</button>
+            </div>
+
+            <!-- Redump search results container -->
+            <div id="redumpSearchResults" style="display: none; border-top: 1px solid var(--border-color); padding-top: 14px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <strong id="redumpResultsCount" style="font-size: 13px;">Found Discs</strong>
+                <span class="text-muted" style="font-size: 11px;">1-Click import to add immediately to your catalog</span>
+              </div>
+              <div id="redumpResultsList" style="display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; padding-right: 4px;">
+                <!-- Dynamically injected -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CARD 2: Manual Disc Creator (Zero-Photo Capable) -->
         <div class="settings-card">
           <div class="settings-card-header">
-            <h3>Admin Security &amp; Access</h3>
-            <span id="authStatusBadge" class="status-badge-offline">Local Mode</span>
+            <h3>Add Demo Disc (Manual Entry)</h3>
           </div>
           <div class="settings-card-body">
             <p class="settings-desc">
-              When exposing DEMOSCENE over Cloudflare Tunnels or a public IP, set an <code>ADMIN_API_KEY</code> in your <code>.env</code> file. Enter that key here to authenticate your browser session.
+              Create a custom disc entry even without photos. Discs will render with a sleek retro CD/DVD placeholder until you upload scans.
             </p>
-
-            <div class="form-group mt-3">
-              <label for="txtAdminApiKey">Admin API Key</label>
-              <input type="password" id="txtAdminApiKey" class="ps-input font-mono" placeholder="••••••••••••••••" spellcheck="false" />
+            <div class="form-group mt-2">
+              <label for="manualDiscTitle">Disc Title *</label>
+              <input type="text" id="manualDiscTitle" class="ps-input" placeholder="e.g. OPS2 Demo 54" required />
             </div>
 
-            <div id="authFeedback" class="form-feedback" style="display: none;"></div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;" class="mt-2">
+              <div class="form-group">
+                <label for="manualDiscConsole">Console</label>
+                <select id="manualDiscConsole" class="ps-select">
+                  <option value="PS2" selected>PlayStation 2 (PS2)</option>
+                  <option value="PS1">PlayStation (PS1)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="manualDiscCountry">Region / Country</label>
+                <input type="text" id="manualDiscCountry" class="ps-input" placeholder="e.g. UK, Europe, Germany" value="Europe" />
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;" class="mt-2">
+              <div class="form-group">
+                <label for="manualDiscSection">Series / Magazine Name</label>
+                <input type="text" id="manualDiscSection" class="ps-input" placeholder="e.g. OPS2M UK, Bonus Demos" value="Community Demos" />
+              </div>
+              <div class="form-group">
+                <label for="manualDiscSced">SCED / Serial Code</label>
+                <input type="text" id="manualDiscSced" class="ps-input font-mono" placeholder="e.g. SCED-52945" />
+              </div>
+            </div>
+
+            <div class="form-group mt-2">
+              <label for="manualDiscGames">Playable Games (Comma-separated)</label>
+              <input type="text" id="manualDiscGames" class="ps-input" placeholder="e.g. Killzone, Burnout 3, Sly 2" />
+            </div>
+
+            <div class="form-group mt-2">
+              <label for="manualDiscNotes">Collector Notes (Optional)</label>
+              <input type="text" id="manualDiscNotes" class="ps-input" placeholder="e.g. Acquired from collection bundle" />
+            </div>
 
             <div class="mt-3">
-              <button class="ps-btn ps-btn-dark" id="btnSaveAdminKey">Save API Key</button>
+              <button class="ps-btn ps-btn-dark" id="btnCreateManualDisc">💿 Save Disc to Catalog</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- CARD 3: Disc Scan & Photo Uploader -->
+        <div class="settings-card">
+          <div class="settings-card-header">
+            <h3>Upload Photos &amp; Scans</h3>
+          </div>
+          <div class="settings-card-body">
+            <p class="settings-desc">
+              Attach physical photos, slipcase scans, or high-res disc scans to any disc in the catalog.
+            </p>
+
+            <div class="form-group mt-2">
+              <label for="uploadTargetSearch">Target Demo Disc</label>
+              <input type="text" id="uploadTargetSearch" class="ps-input mb-1" placeholder="Type to filter disc (e.g. 'Demo 54')..." />
+              <select id="uploadTargetDiscSelect" class="ps-select font-mono" style="max-width: 100%;">
+                <option value="">-- Select a disc from catalog --</option>
+              </select>
+            </div>
+
+            <div class="form-group mt-2">
+              <label for="uploadScanType">Scan / Photo Type</label>
+              <select id="uploadScanType" class="ps-select">
+                <option value="cover_front" selected>Slipcase / Cover Front (-1.jpg)</option>
+                <option value="disc_scan">High-Quality CD/DVD Scan (-2.jpg)</option>
+                <option value="cover_back">Slipcase / Cover Back (-3.jpg)</option>
+                <option value="inlay">Inlay / Booklet Scan (-4.jpg)</option>
+              </select>
+            </div>
+
+            <div class="form-group mt-2">
+              <label>Select Image File (JPG, PNG, WebP)</label>
+              <input type="file" id="uploadScanFileInput" accept="image/jpeg,image/png,image/webp" class="ps-input" />
+            </div>
+
+            <!-- Preview -->
+            <div id="uploadScanPreviewWrap" style="display: none; margin-top: 10px; align-items: center; gap: 12px;">
+              <img id="uploadScanPreviewImg" src="" alt="Preview" style="width: 80px; height: 80px; object-fit: cover; border-radius: 4px; border: 1px solid var(--border-color);" />
+              <span id="uploadScanFileInfo" style="font-size: 11px; color: var(--text-muted);"></span>
+            </div>
+
+            <div class="mt-3">
+              <button class="ps-btn ps-btn-dark" id="btnSubmitScanUpload">⬆️ Upload &amp; Attach to Disc</button>
             </div>
           </div>
         </div>
@@ -740,6 +880,42 @@
           <button class="ps-btn" id="btnWizardSkip">Skip for Now</button>
           <button class="ps-btn ps-btn-dark" id="btnWizardDownload">📦 Download Artwork Pack (~590 MB)</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Account Login & Master Setup Modal -->
+  <div class="ps-modal-backdrop" id="loginModal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="loginModalTitle">
+    <div class="ps-modal ps-modal-md" style="max-width: 420px;">
+      <div class="ps-modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 20px;">🔑</span>
+          <h3 id="loginModalTitle" style="margin: 0;">Account Login</h3>
+        </div>
+        <button class="ps-modal-close" id="btnCloseLoginModal" aria-label="Close login dialog">✕</button>
+      </div>
+      <div class="ps-modal-body">
+        <p id="loginModalDesc" class="text-muted" style="font-size: 12px; margin-bottom: 14px;">
+          Log in with your username and password to manage your collection and master catalog.
+        </p>
+
+        <form id="loginForm" onsubmit="return false;">
+          <div class="form-group">
+            <label for="txtLoginUsername">Username</label>
+            <input type="text" id="txtLoginUsername" class="ps-input" placeholder="e.g. admin" autocomplete="username" required spellcheck="false" />
+          </div>
+
+          <div class="form-group mt-2">
+            <label for="txtLoginPassword">Password</label>
+            <input type="password" id="txtLoginPassword" class="ps-input font-mono" placeholder="••••••••" autocomplete="current-password" required spellcheck="false" />
+          </div>
+
+          <div id="loginFeedback" class="form-feedback" style="display: none; margin-top: 10px;"></div>
+
+          <div class="modal-actions mt-3">
+            <button class="ps-btn ps-btn-dark" id="btnSubmitLogin" style="width: 100%;">Log In</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>

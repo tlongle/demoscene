@@ -74,19 +74,21 @@ function escapeAttr(str) {
 }
 
 async function apiFetch(url, options = {}) {
+  const sessionToken = localStorage.getItem("demoscene_session_token") || "";
   const apiKey = localStorage.getItem("demoscene_api_key") || "";
   const opts = { ...options };
   opts.headers = { ...(opts.headers || {}) };
+  if (sessionToken) {
+    opts.headers["Authorization"] = `Bearer ${sessionToken}`;
+  }
   if (apiKey) {
     opts.headers["X-API-Key"] = apiKey;
   }
   const res = await fetch(url, opts);
   if (res.status === 401) {
-    const entered = window.prompt("This action requires an Admin API Key. Please enter your API key to authenticate:", apiKey);
-    if (entered !== null && entered.trim() !== "") {
-      localStorage.setItem("demoscene_api_key", entered.trim());
-      opts.headers["X-API-Key"] = entered.trim();
-      return fetch(url, opts);
+    showToast("Please log in to perform this action.", "warning");
+    if (typeof openLoginModal === "function") {
+      openLoginModal();
     }
   }
   return res;
@@ -94,7 +96,12 @@ async function apiFetch(url, options = {}) {
 
 // Application State
 const state = {
-  currentPage: "archive", // 'archive', 'collection', 'settings'
+  currentPage: "archive", // 'archive', 'collection', 'admin', 'settings'
+  auth: {
+    authenticated: false,
+    user: null,
+    setup_needed: false
+  },
 
   archive: {
     demos: [],
@@ -139,14 +146,61 @@ const elements = {
   mainNavTabs: document.getElementById("mainNavTabs"),
   navTabArchive: document.getElementById("navTabArchive"),
   navTabCollection: document.getElementById("navTabCollection"),
+  navTabAdmin: document.getElementById("navTabAdmin"),
   navTabSettings: document.getElementById("navTabSettings"),
   navCountArchive: document.getElementById("navCountArchive"),
   navCountOwned: document.getElementById("navCountOwned"),
 
+  // Auth Header Controls
+  btnOpenLoginModal: document.getElementById("btnOpenLoginModal"),
+  userBadgeWrap: document.getElementById("userBadgeWrap"),
+  lblUserBadge: document.getElementById("lblUserBadge"),
+  btnHeaderLogout: document.getElementById("btnHeaderLogout"),
+
   // Pages
   pageArchive: document.getElementById("pageArchive"),
   pageCollection: document.getElementById("pageCollection"),
+  pageAdmin: document.getElementById("pageAdmin"),
   pageSettings: document.getElementById("pageSettings"),
+
+  // Login Modal Elements
+  loginModal: document.getElementById("loginModal"),
+  loginModalTitle: document.getElementById("loginModalTitle"),
+  loginModalDesc: document.getElementById("loginModalDesc"),
+  btnCloseLoginModal: document.getElementById("btnCloseLoginModal"),
+  loginForm: document.getElementById("loginForm"),
+  txtLoginUsername: document.getElementById("txtLoginUsername"),
+  txtLoginPassword: document.getElementById("txtLoginPassword"),
+  loginFeedback: document.getElementById("loginFeedback"),
+  btnSubmitLogin: document.getElementById("btnSubmitLogin"),
+
+  // Redump Integration Elements
+  redumpSearchInput: document.getElementById("redumpSearchInput"),
+  redumpConsoleSelect: document.getElementById("redumpConsoleSelect"),
+  btnRedumpSearch: document.getElementById("btnRedumpSearch"),
+  redumpSearchResults: document.getElementById("redumpSearchResults"),
+  redumpResultsCount: document.getElementById("redumpResultsCount"),
+  redumpResultsList: document.getElementById("redumpResultsList"),
+
+  // Manual Disc Creator Elements
+  manualDiscTitle: document.getElementById("manualDiscTitle"),
+  manualDiscConsole: document.getElementById("manualDiscConsole"),
+  manualDiscCountry: document.getElementById("manualDiscCountry"),
+  manualDiscSection: document.getElementById("manualDiscSection"),
+  manualDiscSced: document.getElementById("manualDiscSced"),
+  manualDiscGames: document.getElementById("manualDiscGames"),
+  manualDiscNotes: document.getElementById("manualDiscNotes"),
+  btnCreateManualDisc: document.getElementById("btnCreateManualDisc"),
+
+  // Scan & Photo Uploader Elements
+  uploadTargetSearch: document.getElementById("uploadTargetSearch"),
+  uploadTargetDiscSelect: document.getElementById("uploadTargetDiscSelect"),
+  uploadScanType: document.getElementById("uploadScanType"),
+  uploadScanFileInput: document.getElementById("uploadScanFileInput"),
+  uploadScanPreviewWrap: document.getElementById("uploadScanPreviewWrap"),
+  uploadScanPreviewImg: document.getElementById("uploadScanPreviewImg"),
+  uploadScanFileInfo: document.getElementById("uploadScanFileInfo"),
+  btnSubmitScanUpload: document.getElementById("btnSubmitScanUpload"),
 
   // --- Archive Page Elements ---
   archiveSearchInput: document.getElementById("archiveSearchInput"),
@@ -258,10 +312,6 @@ const elements = {
   importStatus: document.getElementById("importStatus"),
   btnSyncScrape: document.getElementById("btnSyncScrape"),
   syncStatus: document.getElementById("syncStatus"),
-  authStatusBadge: document.getElementById("authStatusBadge"),
-  txtAdminApiKey: document.getElementById("txtAdminApiKey"),
-  authFeedback: document.getElementById("authFeedback"),
-  btnSaveAdminKey: document.getElementById("btnSaveAdminKey"),
 
   // Modals & Wizard
   welcomeWizardModal: document.getElementById("welcomeWizardModal"),
@@ -294,6 +344,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupArchiveListeners();
   setupCollectionListeners();
   setupSettingsListeners();
+  setupAdminListeners();
   setupModalListeners();
   setupWizardListeners();
 
@@ -305,6 +356,7 @@ document.addEventListener("DOMContentLoaded", () => {
   fetchArchiveDemos(true);
   checkSettingsStatus();
   checkWelcomeWizard();
+  checkAuthStatus();
 });
 
 /* ==========================================================================
@@ -338,12 +390,15 @@ function navigateTo(pageName) {
   // Switch visible page view
   elements.pageArchive.style.display = pageName === "archive" ? "block" : "none";
   elements.pageCollection.style.display = pageName === "collection" ? "block" : "none";
+  if (elements.pageAdmin) elements.pageAdmin.style.display = pageName === "admin" ? "block" : "none";
   elements.pageSettings.style.display = pageName === "settings" ? "block" : "none";
 
   if (pageName === "collection") {
     loadStats();
     fetchCollectionDemos();
     loadCollectionGames();
+  } else if (pageName === "admin") {
+    populateUploadDiscDropdown();
   } else if (pageName === "settings") {
     checkSettingsStatus();
   }
@@ -1532,9 +1587,6 @@ function setupSettingsListeners() {
   elements.btnImportJson.addEventListener("click", () => elements.importFileInput.click());
   elements.importFileInput.addEventListener("change", handleImportBackup);
   elements.btnSyncScrape.addEventListener("click", handleSyncScrape);
-  if (elements.btnSaveAdminKey) {
-    elements.btnSaveAdminKey.addEventListener("click", handleSaveAdminKey);
-  }
 }
 
 async function checkSettingsStatus() {
@@ -1556,45 +1608,7 @@ async function checkSettingsStatus() {
   checkAuthStatus();
 }
 
-async function checkAuthStatus() {
-  try {
-    const res = await apiFetch(`${API_BASE}/api/auth-status`);
-    if (!res.ok) return;
-    const data = await res.json();
-    if (elements.authStatusBadge) {
-      if (data.auth_required) {
-        if (data.authenticated) {
-          elements.authStatusBadge.textContent = "Authenticated";
-          elements.authStatusBadge.className = "status-badge-online";
-        } else {
-          elements.authStatusBadge.textContent = "Key Required";
-          elements.authStatusBadge.className = "status-badge-offline";
-        }
-      } else {
-        elements.authStatusBadge.textContent = "Open (Local Mode)";
-        elements.authStatusBadge.className = "status-badge-online";
-      }
-    }
-    const currentKey = localStorage.getItem("demoscene_api_key") || "";
-    if (elements.txtAdminApiKey && currentKey) {
-      elements.txtAdminApiKey.value = currentKey;
-    }
-  } catch (err) {
-    console.error("Could not check auth status:", err);
-  }
-}
 
-async function handleSaveAdminKey() {
-  const keyVal = elements.txtAdminApiKey.value.trim();
-  if (keyVal) {
-    localStorage.setItem("demoscene_api_key", keyVal);
-    showFormFeedback(elements.authFeedback, "Admin API key saved to browser.", "success");
-  } else {
-    localStorage.removeItem("demoscene_api_key");
-    showFormFeedback(elements.authFeedback, "Admin API key cleared.", "info");
-  }
-  checkAuthStatus();
-}
 
 async function handleSaveSettings() {
   const clientId = elements.txtTwitchClientId.value.trim();
@@ -2047,6 +2061,12 @@ function renderDetailModalContent(demo) {
           </div>
 
           <button class="ps-btn ps-btn-sm ps-btn-dark mt-2" id="btnSaveModalCollection">Save Ledger Entry</button>
+          ${state.auth && state.auth.authenticated && state.auth.user && state.auth.user.is_admin ? `
+            <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 11px; font-weight: 600; color: var(--text-muted);">Admin Controls</span>
+              <button class="ps-btn ps-btn-sm" id="btnModalUploadScan">📷 Upload Scan</button>
+            </div>
+          ` : ''}
         </div>
       </div>
 
@@ -2067,6 +2087,20 @@ function renderDetailModalContent(demo) {
   if (mainView && mainImg) {
     mainView.addEventListener("click", () => {
       openZoomModal(mainImg.src, demo.title);
+    });
+  }
+
+  const btnUploadScan = document.getElementById("btnModalUploadScan");
+  if (btnUploadScan) {
+    btnUploadScan.addEventListener("click", () => {
+      closeModal(elements.detailModal);
+      navigateTo("admin");
+      if (elements.uploadTargetSearch) elements.uploadTargetSearch.value = demo.title;
+      populateUploadDiscDropdown(demo.title).then(() => {
+        if (elements.uploadTargetDiscSelect) {
+          elements.uploadTargetDiscSelect.value = demo.id;
+        }
+      });
     });
   }
 
@@ -2142,6 +2176,375 @@ async function saveModalCollectionState(demo, overrideStatus = null) {
   } catch (err) {
     console.error("Failed to save ledger:", err);
   }
+}
+
+/* ==========================================================================
+   User Authentication & Admin Hub
+   ========================================================================== */
+async function checkAuthStatus() {
+  try {
+    const res = await apiFetch(`${API_BASE}/api/auth/me`);
+    const data = await res.json();
+    state.auth = data;
+
+    if (data.authenticated && data.user) {
+      if (elements.btnOpenLoginModal) elements.btnOpenLoginModal.style.display = "none";
+      if (elements.userBadgeWrap) elements.userBadgeWrap.style.display = "flex";
+      if (elements.lblUserBadge) elements.lblUserBadge.textContent = `👤 ${data.user.username}`;
+      if (elements.navTabAdmin && data.user.is_admin) {
+        elements.navTabAdmin.style.display = "inline-flex";
+      }
+    } else {
+      if (elements.btnOpenLoginModal) elements.btnOpenLoginModal.style.display = "inline-flex";
+      if (elements.userBadgeWrap) elements.userBadgeWrap.style.display = "none";
+      if (elements.navTabAdmin) elements.navTabAdmin.style.display = "none";
+
+      if (data.setup_needed) {
+        openSetupModal();
+      }
+    }
+  } catch (err) {
+    console.warn("Could not verify user auth status:", err);
+  }
+}
+
+function openLoginModal() {
+  if (!elements.loginModal) return;
+  elements.loginModalTitle.textContent = "Account Login";
+  elements.loginModalDesc.textContent = "Log in with your username and password to manage your collection and master catalog.";
+  elements.btnSubmitLogin.textContent = "Log In";
+  elements.loginFeedback.style.display = "none";
+  elements.txtLoginUsername.value = "";
+  elements.txtLoginPassword.value = "";
+  openModal(elements.loginModal);
+}
+
+function openSetupModal() {
+  if (!elements.loginModal) return;
+  elements.loginModalTitle.textContent = "Setup Master Account";
+  elements.loginModalDesc.textContent = "Welcome to DEMOSCENE! Please create your master administrator account to get started.";
+  elements.btnSubmitLogin.textContent = "Create Master Account";
+  elements.loginFeedback.style.display = "none";
+  elements.txtLoginUsername.value = "admin";
+  elements.txtLoginPassword.value = "";
+  openModal(elements.loginModal);
+}
+
+async function handleLoginSubmit() {
+  const username = elements.txtLoginUsername.value.trim();
+  const password = elements.txtLoginPassword.value;
+  if (!username || !password) {
+    showFormFeedback(elements.loginFeedback, "Please enter both username and password.", "error");
+    return;
+  }
+
+  const isSetup = state.auth && state.auth.setup_needed;
+  const endpoint = isSetup ? "/api/auth/setup" : "/api/auth/login";
+
+  try {
+    const res = await fetch(`${API_BASE}${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      if (data.token) {
+        localStorage.setItem("demoscene_session_token", data.token);
+      }
+      closeModal(elements.loginModal);
+      showToast(isSetup ? "Master Admin account created!" : `Welcome back, ${data.user.username}!`, "success");
+      await checkAuthStatus();
+      if (state.currentPage === "admin") {
+        populateUploadDiscDropdown();
+      }
+    } else {
+      showFormFeedback(elements.loginFeedback, data.detail || "Authentication failed", "error");
+    }
+  } catch (err) {
+    showFormFeedback(elements.loginFeedback, `Network error: ${err.message}`, "error");
+  }
+}
+
+async function handleLogout() {
+  try {
+    await apiFetch(`${API_BASE}/api/auth/logout`, { method: "POST" });
+  } catch (e) {}
+  localStorage.removeItem("demoscene_session_token");
+  showToast("Logged out successfully.", "info");
+  if (state.currentPage === "admin") {
+    navigateTo("archive");
+  }
+  await checkAuthStatus();
+}
+
+function setupAdminListeners() {
+  // Login / Logout buttons
+  if (elements.btnOpenLoginModal) {
+    elements.btnOpenLoginModal.addEventListener("click", () => {
+      if (state.auth && state.auth.setup_needed) openSetupModal();
+      else openLoginModal();
+    });
+  }
+  if (elements.btnCloseLoginModal) {
+    elements.btnCloseLoginModal.addEventListener("click", () => closeModal(elements.loginModal));
+  }
+  if (elements.btnSubmitLogin) {
+    elements.btnSubmitLogin.addEventListener("click", handleLoginSubmit);
+  }
+  if (elements.loginForm) {
+    elements.loginForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      handleLoginSubmit();
+    });
+  }
+  if (elements.btnHeaderLogout) {
+    elements.btnHeaderLogout.addEventListener("click", handleLogout);
+  }
+
+  // Redump Search
+  if (elements.btnRedumpSearch) {
+    elements.btnRedumpSearch.addEventListener("click", handleRedumpSearch);
+  }
+  if (elements.redumpSearchInput) {
+    elements.redumpSearchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handleRedumpSearch();
+      }
+    });
+  }
+
+  // Manual Disc Creation
+  if (elements.btnCreateManualDisc) {
+    elements.btnCreateManualDisc.addEventListener("click", handleCreateManualDisc);
+  }
+
+  // Scan Upload Filter & Submit
+  if (elements.uploadTargetSearch) {
+    elements.uploadTargetSearch.addEventListener("input", (e) => {
+      populateUploadDiscDropdown(e.target.value.trim());
+    });
+  }
+  if (elements.uploadScanFileInput) {
+    elements.uploadScanFileInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          elements.uploadScanPreviewImg.src = evt.target.result;
+          elements.uploadScanFileInfo.textContent = `${file.name} (${Math.round(file.size / 1024)} KB)`;
+          elements.uploadScanPreviewWrap.style.display = "flex";
+        };
+        reader.readAsDataURL(file);
+      } else {
+        elements.uploadScanPreviewWrap.style.display = "none";
+      }
+    });
+  }
+  if (elements.btnSubmitScanUpload) {
+    elements.btnSubmitScanUpload.addEventListener("click", handleScanUpload);
+  }
+}
+
+async function handleRedumpSearch() {
+  const query = elements.redumpSearchInput.value.trim();
+  if (!query) {
+    showToast("Please enter a title or serial to search Redump.", "warning");
+    return;
+  }
+  const consoleVal = elements.redumpConsoleSelect.value;
+  elements.btnRedumpSearch.disabled = true;
+  elements.btnRedumpSearch.textContent = "Searching...";
+  elements.redumpSearchResults.style.display = "block";
+  elements.redumpResultsList.innerHTML = `<div class="p-3 text-muted">Searching Redump.org database...</div>`;
+
+  try {
+    const url = `${API_BASE}/api/admin/redump/search?q=${encodeURIComponent(query)}${consoleVal ? `&console=${encodeURIComponent(consoleVal)}` : ""}`;
+    const res = await apiFetch(url);
+    const data = await res.json();
+    const results = data.results || [];
+    elements.redumpResultsCount.textContent = `Found ${results.length} Disc${results.length === 1 ? '' : 's'} on Redump`;
+
+    if (results.length === 0) {
+      elements.redumpResultsList.innerHTML = `<div class="p-3 text-muted">No matching PlayStation discs found on Redump. Check spelling or try a serial code.</div>`;
+      return;
+    }
+
+    elements.redumpResultsList.innerHTML = results.map(r => `
+      <div style="display: flex; justify-content: space-between; align-items: center; background: var(--ps1-white); border: 1px solid var(--border-color); padding: 10px 12px; border-radius: 6px; gap: 10px;">
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <span class="tag-badge ${r.console === 'PS1' ? 'tag-ps1' : 'tag-ps2'}">${r.console}</span>
+            <span class="sced-mono" style="font-size: 11px;">${escapeHtml(r.serial || 'NO-SERIAL')}</span>
+            ${r.version ? `<span class="tag-badge" style="font-size: 10px;">v${escapeHtml(r.version)}</span>` : ''}
+          </div>
+          <strong style="font-size: 13px; color: var(--text-main); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            ${escapeHtml(r.title)}
+          </strong>
+          <span style="font-size: 11px; color: var(--text-muted);">
+            ${escapeHtml(r.edition || '')} ${r.languages ? `• Lang: ${escapeHtml(r.languages)}` : ''}
+          </span>
+        </div>
+        <button class="ps-btn ps-btn-sm ps-btn-dark btn-import-redump" data-redump-id="${r.redump_id}" data-disc-title="${escapeAttr(r.title)}" style="white-space: nowrap;">
+          📥 Import Disc
+        </button>
+      </div>
+    `).join("");
+
+    elements.redumpResultsList.querySelectorAll(".btn-import-redump").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const id = parseInt(btn.getAttribute("data-redump-id"), 10);
+        const title = btn.getAttribute("data-disc-title");
+        btn.disabled = true;
+        btn.textContent = "Importing...";
+        await handleRedumpImport(id, title);
+        btn.textContent = "✓ Imported";
+      });
+    });
+  } catch (err) {
+    elements.redumpResultsList.innerHTML = `<div class="p-3 txt-red">Error searching Redump: ${err.message}</div>`;
+  } finally {
+    elements.btnRedumpSearch.disabled = false;
+    elements.btnRedumpSearch.textContent = "🔍 Search Redump";
+  }
+}
+
+async function handleRedumpImport(redumpId, discTitle) {
+  try {
+    const res = await apiFetch(`${API_BASE}/api/admin/redump/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ redump_id: redumpId })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(`Imported "${discTitle}" into catalog!`, "success");
+      fetchArchiveDemos(false);
+      loadStats();
+      populateUploadDiscDropdown();
+    } else {
+      showToast(data.detail || "Failed to import disc", "error");
+    }
+  } catch (err) {
+    showToast(`Import failed: ${err.message}`, "error");
+  }
+}
+
+async function handleCreateManualDisc() {
+  const title = elements.manualDiscTitle.value.trim();
+  if (!title) {
+    showToast("Please enter a disc title.", "warning");
+    return;
+  }
+  const consoleVal = elements.manualDiscConsole.value;
+  const country = elements.manualDiscCountry.value.trim() || "Europe";
+  const section = elements.manualDiscSection.value.trim() || "Community Demos";
+  const sced = elements.manualDiscSced.value.trim();
+  const rawGames = elements.manualDiscGames.value.trim();
+  const notes = elements.manualDiscNotes.value.trim();
+
+  const gamesList = rawGames ? rawGames.split(",").map(g => g.trim()).filter(Boolean) : [title];
+
+  const payload = {
+    title,
+    console: consoleVal,
+    section_name: section,
+    country,
+    sced_codes: sced ? [sced] : [],
+    categories: { "Playable": gamesList },
+    notes,
+    source: "manual"
+  };
+
+  try {
+    const res = await apiFetch(`${API_BASE}/api/admin/demos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(`Disc "${title}" saved to catalog!`, "success");
+      elements.manualDiscTitle.value = "";
+      elements.manualDiscSced.value = "";
+      elements.manualDiscGames.value = "";
+      elements.manualDiscNotes.value = "";
+      fetchArchiveDemos(false);
+      loadStats();
+      populateUploadDiscDropdown();
+    } else {
+      showToast(data.detail || "Could not save disc", "error");
+    }
+  } catch (err) {
+    showToast(`Error: ${err.message}`, "error");
+  }
+}
+
+async function populateUploadDiscDropdown(filterTerm = "") {
+  if (!elements.uploadTargetDiscSelect) return;
+  try {
+    const url = `${API_BASE}/api/demos?limit=60${filterTerm ? `&q=${encodeURIComponent(filterTerm)}` : ""}`;
+    const res = await apiFetch(url);
+    const data = await res.json();
+    const demos = data.results || [];
+
+    elements.uploadTargetDiscSelect.innerHTML = `<option value="">-- Select a disc from catalog (${demos.length} listed) --</option>` +
+      demos.map(d => {
+        const sced = d.catalog_line || (d.sced_codes && d.sced_codes[0]) || "NO-SCED";
+        return `<option value="${escapeAttr(d.id)}">[${d.console}] ${escapeHtml(d.title)} (${sced})</option>`;
+      }).join("");
+  } catch (err) {
+    console.warn("Could not populate target disc dropdown:", err);
+  }
+}
+
+async function handleScanUpload() {
+  const demoId = elements.uploadTargetDiscSelect.value;
+  if (!demoId) {
+    showToast("Please select a target demo disc first.", "warning");
+    return;
+  }
+  const scanType = elements.uploadScanType.value;
+  const file = elements.uploadScanFileInput.files[0];
+  if (!file) {
+    showToast("Please select an image file to upload.", "warning");
+    return;
+  }
+
+  elements.btnSubmitScanUpload.disabled = true;
+  elements.btnSubmitScanUpload.textContent = "Uploading Scan...";
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const b64 = e.target.result;
+      const res = await apiFetch(`${API_BASE}/api/admin/demos/${encodeURIComponent(demoId)}/scans`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image_base64: b64,
+          filename: file.name,
+          scan_type: scanType
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast("Scan attached to disc successfully!", "success");
+        elements.uploadScanFileInput.value = "";
+        elements.uploadScanPreviewWrap.style.display = "none";
+        fetchArchiveDemos(false);
+      } else {
+        showToast(data.detail || "Failed to upload scan", "error");
+      }
+    } catch (err) {
+      showToast(`Upload failed: ${err.message}`, "error");
+    } finally {
+      elements.btnSubmitScanUpload.disabled = false;
+      elements.btnSubmitScanUpload.textContent = "⬆️ Upload & Attach to Disc";
+    }
+  };
+  reader.readAsDataURL(file);
 }
 
 /* ==========================================================================

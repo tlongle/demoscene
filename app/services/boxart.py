@@ -5,10 +5,9 @@ with local persistent disk caching in data/assets/boxart/.
 """
 import os
 import re
-import json
 import time
 import requests
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 
 from app.core.config import settings
 from app.core.database import get_db_connection
@@ -154,18 +153,7 @@ def get_cached_boxart_path(game_name: str, console: str = "PS2") -> Optional[str
     conn.close()
 
     if row and row[0]:
-        cover_path = row[0]
-        if cover_path.startswith("http://") or cover_path.startswith("https://"):
-            return cover_path
-        if cover_path.startswith("/assets/"):
-            rel_path = cover_path[len("/assets/"):]
-            disk_file = os.path.join(settings.ASSETS_DIR, rel_path)
-            if os.path.exists(disk_file):
-                return cover_path
-            return cover_path
-        if os.path.exists(cover_path.lstrip("/")):
-            return cover_path
-        return cover_path
+        return row[0]
 
     slug = sanitize_filename(f"{console}_{game_name}")
     for ext in [".jpg", ".png", ".webp"]:
