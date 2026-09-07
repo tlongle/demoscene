@@ -280,7 +280,7 @@ async def get_current_user_profile(user: Optional[Dict[str, Any]] = Depends(auth
     return {
         "authenticated": user is not None,
         "user": user,
-        "setup_needed": (not settings.is_public and user_count == 0),
+        "setup_needed": (user_count == 0),
         "mode": settings.MODE,
         "is_public": settings.is_public,
         "registration_allowed": settings.is_public or settings.ALLOW_REGISTRATION or (user_count == 0)

@@ -174,6 +174,7 @@ const elements = {
   // Showcase Elements
   showcaseTitle: document.getElementById("showcaseTitle"),
   showcaseSubtitle: document.getElementById("showcaseSubtitle"),
+  btnShowcaseShare: document.getElementById("btnShowcaseShare"),
   btnShowcaseBack: document.getElementById("btnShowcaseBack"),
   showcasePrivateNotice: document.getElementById("showcasePrivateNotice"),
   showcasePrivateMsg: document.getElementById("showcasePrivateMsg"),
@@ -450,6 +451,22 @@ function setupNavigation() {
     elements.btnMyShowcase.addEventListener("click", () => {
       if (state.auth && state.auth.user) {
         window.location.hash = `#u/${encodeURIComponent(state.auth.user.username)}`;
+        navigateTo("showcase", state.auth.user.username);
+      }
+    });
+  }
+
+  if (elements.btnShowcaseShare) {
+    elements.btnShowcaseShare.addEventListener("click", () => {
+      const url = window.location.href;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(() => {
+          showToast("Profile link copied to clipboard!", "success");
+        }).catch(() => {
+          showToast("Profile link: " + url, "info");
+        });
+      } else {
+        showToast("Profile link: " + url, "info");
       }
     });
   }
@@ -483,16 +500,29 @@ function navigateTo(pageName, param) {
     }
   });
 
-  // Switch visible page view
-  elements.pageArchive.style.display = pageName === "archive" ? "block" : "none";
-  elements.pageCollection.style.display = pageName === "collection" ? "block" : "none";
-  if (elements.pageAdmin) elements.pageAdmin.style.display = pageName === "admin" ? "block" : "none";
-  elements.pageSettings.style.display = pageName === "settings" ? "block" : "none";
-  if (elements.pagePublicProfile) elements.pagePublicProfile.style.display = pageName === "showcase" ? "block" : "none";
+  // Switch visible page view with proper active class toggling
+  const views = [
+    { el: elements.pageArchive, name: "archive" },
+    { el: elements.pageCollection, name: "collection" },
+    { el: elements.pageAdmin, name: "admin" },
+    { el: elements.pageSettings, name: "settings" },
+    { el: elements.pagePublicProfile, name: "showcase" }
+  ];
+
+  views.forEach(v => {
+    if (v.el) {
+      const isActive = v.name === pageName;
+      v.el.style.display = isActive ? "block" : "none";
+      v.el.classList.toggle("active", isActive);
+    }
+  });
 
   if (pageName !== "showcase" && window.location.hash.startsWith("#u/")) {
     history.pushState(null, "", window.location.pathname + window.location.search);
   }
+
+  // Scroll to top on page switch
+  window.scrollTo({ top: 0, behavior: "instant" });
 
   if (pageName === "collection") {
     loadStats();
@@ -2602,21 +2632,31 @@ async function loadPublicShowcase(username) {
 
     elements.showcaseBody.style.display = "block";
     const st = data.stats || {};
-    elements.showcaseOwnedCount.textContent = st.owned_count != null ? st.owned_count : (data.total_owned || 0);
+    const ownedTotal = st.owned_demos != null ? st.owned_demos : (data.total_owned || 0);
+    elements.showcaseOwnedCount.textContent = ownedTotal;
     elements.showcaseCompletionRate.textContent = st.completion_rate != null ? `${Number(st.completion_rate).toFixed(1)}%` : "0.0%";
-    elements.showcasePs1Count.textContent = (st.ps1_summary && st.ps1_summary.owned != null) ? st.ps1_summary.owned : 0;
-    elements.showcasePs2Count.textContent = (st.ps2_summary && st.ps2_summary.owned != null) ? st.ps2_summary.owned : 0;
+    elements.showcasePs1Count.textContent = st.owned_ps1 != null ? st.owned_ps1 : 0;
+    elements.showcasePs2Count.textContent = st.owned_ps2 != null ? st.owned_ps2 : 0;
 
     const discs = data.discs || [];
     elements.showcaseResultsCount.textContent = `${discs.length} discs`;
     elements.showcaseGalleryTitle.textContent = `${username}'s Discs (${discs.length})`;
 
+    const isOwner = state.auth && state.auth.user && (state.auth.user.username.toLowerCase() === username.toLowerCase());
+
     if (discs.length === 0) {
       elements.showcaseContainer.innerHTML = `
-        <div class="empty-box" style="grid-column: 1 / -1; padding: 40px 20px;">
-          <p class="text-muted">This collector has not cataloged any discs yet.</p>
+        <div class="empty-box" style="grid-column: 1 / -1; padding: 40px 20px; text-align: center;">
+          <p class="text-muted" style="margin-bottom: 12px;">
+            ${isOwner ? "You haven't added any discs to your collection yet." : "This collector has not cataloged any discs yet."}
+          </p>
+          ${isOwner ? '<button class="ps-btn ps-btn-dark" id="btnShowcaseEmptyBrowse">Browse Archive to Add Discs</button>' : ''}
         </div>
       `;
+      const btnBrowse = document.getElementById("btnShowcaseEmptyBrowse");
+      if (btnBrowse) {
+        btnBrowse.addEventListener("click", () => navigateTo("archive"));
+      }
       return;
     }
 

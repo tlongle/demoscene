@@ -178,6 +178,77 @@ body {
   color: #fff;
 }
 
+.header-nav-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.auth-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#userBadgeWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Showcase Profile Header & Stats */
+.showcase-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.showcase-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.showcase-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  background: var(--ps1-grey-panel);
+  padding: 14px;
+  border-radius: 4px;
+  border: 1px solid var(--ps1-border);
+}
+
+.showcase-stat-tile {
+  background: var(--ps1-white);
+  border: 1px solid var(--ps1-border);
+  padding: 12px 16px;
+  border-radius: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-tile-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.4px;
+}
+
+.stat-tile-val {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.1;
+}
+
+.stat-tile-val.text-owned {
+  color: var(--status-owned);
+}
+
 /* --------------------------------------------------------------------------
    PAGE 1: ARCHIVE EXPLORER
    -------------------------------------------------------------------------- */
@@ -1824,70 +1895,301 @@ body.modal-open {
 }
 
 @media (max-width: 768px) {
+  /* Prevent iOS input auto-zoom */
+  input[type="text"],
+  input[type="password"],
+  input[type="search"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
   .app-wrapper {
     padding: 8px;
+    max-width: 100vw;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+
+  /* Compact Native-style Mobile Header */
+  .ps-header {
+    margin-bottom: 10px;
+    border-radius: 4px;
   }
 
   .header-main {
-    padding: 10px 12px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    grid-template-areas:
+      "brand auth"
+      "nav   nav";
+    padding: 8px 10px;
     gap: 8px;
+  }
+
+  .brand {
+    grid-area: brand;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .brand-logo-img {
+    width: 32px;
+    height: 32px;
   }
 
   .brand-title {
     font-size: 16px;
+    letter-spacing: -0.2px;
+  }
+
+  .brand-subtitle {
+    display: none; /* Hide subtitle on mobile phones to maintain clean bar */
+  }
+
+  .auth-header-controls {
+    grid-area: auth;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  .auth-header-controls .ps-btn {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+
+  #userBadgeWrap {
+    gap: 6px;
+  }
+
+  .header-nav-wrap {
+    grid-area: nav;
+    display: flex;
+    width: 100%;
   }
 
   .nav-tabs {
     width: 100%;
-    justify-content: space-between;
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 4px;
+    padding-bottom: 2px;
+  }
+
+  .nav-tabs::-webkit-scrollbar {
+    display: none;
   }
 
   .nav-tab {
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: fit-content;
+    text-align: center;
     justify-content: center;
-    padding: 6px 6px;
+    padding: 7px 10px;
     font-size: 12px;
+    white-space: nowrap;
   }
 
-  .disc-grid {
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  /* Search & Controls on Mobile */
+  .controls-panel {
+    padding: 10px;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .search-row {
+    padding: 4px 8px;
+  }
+
+  .search-label {
+    font-size: 10px;
+    padding-right: 4px;
+  }
+
+  .filters-row {
+    flex-direction: column;
+    align-items: stretch;
     gap: 8px;
   }
 
-  .card-title {
-    font-size: 12px;
-    height: 32px;
+  .filter-cell {
+    width: 100%;
   }
 
-  .card-info {
+  .filter-cell .btn-group {
+    width: 100%;
+  }
+
+  .filter-cell .btn-group .btn-toggle {
+    flex: 1;
+    text-align: center;
+    padding: 7px 4px;
+    font-size: 12px;
+  }
+
+  .filter-cell select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+  }
+
+  /* Gallery Header Toolbar */
+  .gallery-header {
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .gallery-title {
+    font-size: 15px;
+  }
+
+  .gallery-toolbar {
+    margin-left: auto;
+  }
+
+  /* Showcase / Profile Page Mobile */
+  .showcase-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .showcase-header-actions {
+    display: flex;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .showcase-header-actions .ps-btn {
+    flex: 1;
+    text-align: center;
+    justify-content: center;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .showcase-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .showcase-stat-tile {
+    padding: 10px 12px;
+  }
+
+  .stat-tile-label {
+    font-size: 10px;
+  }
+
+  .stat-tile-val {
+    font-size: 18px;
+  }
+
+  /* My Collection Header */
+  .collection-page-header {
+    padding: 10px 12px;
+    gap: 10px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mobile-only-btn {
+    width: 100%;
     padding: 8px;
+    font-size: 12px;
+    text-align: center;
   }
 
   .collection-filters-row {
     flex-direction: column;
     align-items: stretch;
-    gap: 6px;
+    gap: 8px;
   }
 
   .collection-actions-right {
-    margin-left: 0;
-    justify-content: space-between;
     width: 100%;
+    justify-content: space-between;
+    margin-left: 0;
   }
 
+  /* Collection List Rows (.pc-row) */
   .pc-row {
     flex-wrap: wrap;
-    gap: 6px;
-    padding: 8px;
+    gap: 8px;
+    padding: 10px 8px;
+    align-items: flex-start;
+  }
+
+  .pc-thumb {
+    width: 44px;
+    height: 44px;
   }
 
   .pc-main {
-    flex: 1 1 calc(100% - 60px);
-    min-width: 130px;
+    flex: 1 1 calc(100% - 62px);
+    min-width: 0;
   }
 
-  .settings-cards-grid {
-    grid-template-columns: 1fr;
+  .pc-title {
+    font-size: 13px;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .pc-counts {
+    display: none;
+  }
+
+  .pc-checklist {
+    order: 3;
+    gap: 4px;
+  }
+
+  .pc-cond-tag {
+    order: 2;
+  }
+
+  .pc-actions {
+    order: 4;
+    margin-left: auto;
+  }
+
+  .btn-pc-action {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+
+  /* Modals: Bottom-Sheet Responsive */
+  .ps-modal-backdrop {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .ps-modal {
+    max-height: 94vh;
+    border-radius: 8px 8px 0 0;
+    width: 100vw;
+    max-width: 100vw;
+  }
+
+  .ps-modal-body {
+    padding: 14px 12px;
+    max-height: calc(94vh - 55px);
   }
 
   .detail-grid {
@@ -1895,7 +2197,37 @@ body.modal-open {
     gap: 14px;
   }
 
+  .scans-main-view {
+    max-height: 260px;
+  }
+
+  .scans-thumbs {
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .collector-box {
+    margin-top: 10px;
+  }
+
+  .collector-actions {
+    display: flex;
+    gap: 6px;
+  }
+
+  .collector-actions .ps-btn {
+    flex: 1;
+    padding: 8px 4px;
+    text-align: center;
+    font-size: 12px;
+  }
+
   .games-list {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .settings-cards-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1904,21 +2236,43 @@ body.modal-open {
     padding: 8px 10px;
     gap: 8px;
   }
+
+  /* Toast Notifications */
+  #toastContainer {
+    bottom: 12px;
+    right: 12px;
+    left: 12px;
+    align-items: stretch;
+  }
+
+  .ps-toast {
+    max-width: 100%;
+  }
 }
 
 @media (max-width: 480px) {
   .disc-grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 6px;
+    gap: 8px;
+  }
+
+  .ps-card {
+    border-radius: 3px;
   }
 
   .card-img-wrap {
     aspect-ratio: 1 / 1;
   }
 
+  .card-info {
+    padding: 6px 8px 8px;
+  }
+
   .card-title {
-    font-size: 11px;
-    height: 28px;
+    font-size: 12px;
+    height: 30px;
+    line-height: 1.25;
+    overflow: hidden;
   }
 
   .card-sced {
@@ -1928,13 +2282,19 @@ body.modal-open {
 
   .card-footer {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .card-counts {
+    font-size: 10px;
   }
 
   .btn-card-track {
     width: 100%;
     text-align: center;
+    padding: 6px 4px;
+    font-size: 11px;
   }
 }
 

@@ -39,7 +39,7 @@
         </div>
 
         <!-- Primary Top Navigation Tabs -->
-        <div class="header-nav-wrap" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <div class="header-nav-wrap">
           <nav class="nav-tabs" id="mainNavTabs">
             <button class="nav-tab active" data-page="archive" id="navTabArchive">
               Archive <span class="nav-badge" id="navCountArchive">-</span>
@@ -56,11 +56,11 @@
           </nav>
 
           <!-- Auth Status / Log In Controls -->
-          <div class="auth-header-controls" id="authHeaderControls" style="display: flex; align-items: center; gap: 8px;">
+          <div class="auth-header-controls" id="authHeaderControls">
             <button class="ps-btn ps-btn-sm" id="btnOpenLoginModal">🔑 Log In</button>
             <button class="ps-btn ps-btn-sm ps-btn-dark" id="btnOpenRegisterModal" style="display: none;">Register</button>
-            <div id="userBadgeWrap" style="display: none; align-items: center; gap: 8px;">
-              <button class="ps-btn ps-btn-sm" id="btnMyShowcase" title="View my public showcase profile" style="background: var(--ps1-grey-panel); font-weight: 600;">👤 <span id="lblUserBadge">User</span></button>
+            <div id="userBadgeWrap" style="display: none;">
+              <button class="ps-btn ps-btn-sm" id="btnMyShowcase" title="View my public showcase profile">👤 <span id="lblUserBadge">User</span></button>
               <button class="ps-btn ps-btn-sm" id="btnHeaderLogout" title="Log Out">Log Out</button>
             </div>
           </div>
@@ -434,12 +434,15 @@
          ========================================================================= -->
     <main id="pagePublicProfile" class="page-view" style="display: none;">
       
-      <div class="collection-page-header">
-        <div>
+      <div class="collection-page-header showcase-header">
+        <div class="showcase-header-left">
           <h2 class="collection-page-title" id="showcaseTitle">Collector Showcase</h2>
           <p class="collection-page-sub" id="showcaseSubtitle">Verified PlayStation Demo &amp; Promo Archive</p>
         </div>
-        <button class="ps-btn ps-btn-sm" id="btnShowcaseBack">← Back to Archive</button>
+        <div class="showcase-header-actions">
+          <button class="ps-btn ps-btn-sm" id="btnShowcaseShare" title="Copy public profile URL">🔗 Share Profile</button>
+          <button class="ps-btn ps-btn-sm" id="btnShowcaseBack">← Back to Archive</button>
+        </div>
       </div>
 
       <!-- Private Notice if User is Private -->
@@ -452,22 +455,22 @@
       <!-- Showcase Body -->
       <div id="showcaseBody" style="display: none;">
         <!-- Showcase Stats Bar -->
-        <div class="stat-progress-block mb-3" style="background: var(--ps1-grey-panel); padding: 14px 18px; border-radius: 6px; border: 1px solid var(--border-color); display: flex; gap: 24px; flex-wrap: wrap; align-items: center;">
-          <div>
-            <span class="text-muted" style="font-size: 11px; font-weight: 600; display: block;">DISCS OWNED</span>
-            <strong id="showcaseOwnedCount" style="font-size: 22px; color: var(--status-owned);">0</strong>
+        <div class="showcase-stats-grid mb-3">
+          <div class="showcase-stat-tile">
+            <span class="stat-tile-label">DISCS OWNED</span>
+            <strong class="stat-tile-val text-owned" id="showcaseOwnedCount">0</strong>
           </div>
-          <div style="border-left: 1px solid var(--border-color); padding-left: 20px;">
-            <span class="text-muted" style="font-size: 11px; font-weight: 600; display: block;">ARCHIVE COMPLETION</span>
-            <strong id="showcaseCompletionRate" style="font-size: 22px;">0.0%</strong>
+          <div class="showcase-stat-tile">
+            <span class="stat-tile-label">ARCHIVE COMPLETION</span>
+            <strong class="stat-tile-val" id="showcaseCompletionRate">0.0%</strong>
           </div>
-          <div style="border-left: 1px solid var(--border-color); padding-left: 20px;">
-            <span class="text-muted" style="font-size: 11px; font-weight: 600; display: block;">PS1 DISCS</span>
-            <strong id="showcasePs1Count" style="font-size: 22px;">0</strong>
+          <div class="showcase-stat-tile">
+            <span class="stat-tile-label">PS1 DISCS</span>
+            <strong class="stat-tile-val" id="showcasePs1Count">0</strong>
           </div>
-          <div style="border-left: 1px solid var(--border-color); padding-left: 20px;">
-            <span class="text-muted" style="font-size: 11px; font-weight: 600; display: block;">PS2 DISCS</span>
-            <strong id="showcasePs2Count" style="font-size: 22px;">0</strong>
+          <div class="showcase-stat-tile">
+            <span class="stat-tile-label">PS2 DISCS</span>
+            <strong class="stat-tile-val" id="showcasePs2Count">0</strong>
           </div>
         </div>
 
