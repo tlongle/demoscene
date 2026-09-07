@@ -330,3 +330,46 @@ def test_security_headers_and_auth_rate_limiting():
     assert hit_limit, "Rate limiter should return 429 after exceeding limit"
 
 
+def test_public_mode_image_pulling_disabled_and_no_api_key_required():
+    """Verify image pulling via UI is exclusive to self-hosted, and users need zero API keys."""
+    from app.core.config import settings
+    orig_mode = settings.MODE
+    try:
+        settings.MODE = "public"
+
+        # Login as admin to verify that even an admin is prevented from UI image pulling in public mode
+        r_login = client.post("/api/auth/login", json={"username": "superadmin", "password": "masterpassword123"})
+        token = r_login.json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # 1. Image pulling endpoints return 403 in public mode
+        r_pack = client.post("/api/assets/pack/download", json={}, headers=headers)
+        assert r_pack.status_code == 403
+        assert "disabled in public web mode" in r_pack.json()["detail"]
+
+        r_boxart = client.post("/api/boxart/fetch-all", headers=headers)
+        assert r_boxart.status_code == 403
+        assert "unavailable in public web mode" in r_boxart.json()["detail"]
+
+        r_twitch = client.post("/api/settings", json={"twitch_client_id": "id", "twitch_client_secret": "sec"}, headers=headers)
+        assert r_twitch.status_code == 403
+        assert "public web mode" in r_twitch.json()["detail"]
+
+        # 2. Asset pack status always reports assets_ready=True in public mode
+        r_status = client.get("/api/assets/pack/status")
+        assert r_status.status_code == 200
+        assert r_status.json()["assets_ready"] is True
+
+        # 3. Standard users can track collection with zero API keys
+        r_login_user = client.post("/api/auth/login", json={"username": "collector_alice", "password": "alicepassword123"})
+        alice_token = r_login_user.json()["token"]
+        r_all_demos = client.get("/api/demos?limit=1")
+        demo_id = r_all_demos.json()["results"][0]["id"]
+        # Notice: NO X-API-Key header provided!
+        r_coll = client.post(f"/api/collection/{demo_id}", json={"status": "owned"}, headers={"Authorization": f"Bearer {alice_token}"})
+        assert r_coll.status_code == 200
+    finally:
+        settings.MODE = orig_mode
+
+
+

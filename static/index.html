@@ -528,7 +528,7 @@
         </div>
         
         <!-- CARD 1: Official IGDB Box Art Integration -->
-        <div class="settings-card">
+        <div class="settings-card" id="cardIgdbSettings">
           <div class="settings-card-header">
             <h3>Official IGDB (Twitch API) Box Art</h3>
             <span id="igdbStatusBadge" class="status-badge-offline">Not Configured</span>
@@ -558,7 +558,7 @@
               <p><strong>How to get free Twitch keys:</strong></p>
               <ol>
                 <li>Go to <a href="https://dev.twitch.tv/console" target="_blank" rel="noopener">dev.twitch.tv/console</a> and log in.</li>
-                <li>Click <strong>Register Your Application</strong> (Name: "DemoScene Collector", Category: "Application Integration").</li>
+                <li>Click <strong>Register Your Application</strong> (Name: "PBPX Archive", Category: "Application Integration").</li>
                 <li>Set OAuth Redirect URL to <code>http://localhost</code>.</li>
                 <li>Copy your <strong>Client ID</strong> and generate a <strong>New Secret</strong>.</li>
               </ol>
@@ -567,7 +567,7 @@
         </div>
 
         <!-- CARD 2: Offline Scans & Storage -->
-        <div class="settings-card">
+        <div class="settings-card" id="cardOfflineAssets">
           <div class="settings-card-header">
             <h3>Offline Scans &amp; Media Cache</h3>
           </div>
@@ -606,7 +606,7 @@
         </div>
 
         <!-- CARD 3: Backup & Restore -->
-        <div class="settings-card">
+        <div class="settings-card" id="cardBackupRestore">
           <div class="settings-card-header">
             <h3>Collection Backup &amp; Restore</h3>
           </div>
@@ -636,13 +636,13 @@
         </div>
 
         <!-- CARD 4: Catalog Synchronization -->
-        <div class="settings-card">
+        <div class="settings-card" id="cardCatalogSync">
           <div class="settings-card-header">
             <h3>Catalog Synchronization</h3>
           </div>
           <div class="settings-card-body">
             <p class="settings-desc">
-              DEMOSCENE maintains its own verified master catalog. Check Crimson Ceremony for newly added demo releases after February 2026 without altering existing catalog data.
+              PBPX maintains its own verified master catalog. Check Crimson Ceremony for newly added demo releases without altering existing catalog data.
             </p>
 
             <div class="setting-action-block mt-3">

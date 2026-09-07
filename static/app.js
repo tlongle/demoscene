@@ -75,14 +75,10 @@ function escapeAttr(str) {
 
 async function apiFetch(url, options = {}) {
   const sessionToken = localStorage.getItem("pbpx_session_token") || localStorage.getItem("demoscene_session_token") || "";
-  const apiKey = localStorage.getItem("pbpx_api_key") || localStorage.getItem("demoscene_api_key") || "";
   const opts = { ...options };
   opts.headers = { ...(opts.headers || {}) };
   if (sessionToken) {
     opts.headers["Authorization"] = `Bearer ${sessionToken}`;
-  }
-  if (apiKey) {
-    opts.headers["X-API-Key"] = apiKey;
   }
   const res = await fetch(url, opts);
   if (res.status === 401 && !opts.silent401) {
@@ -202,6 +198,12 @@ const elements = {
   btnCopyShowcaseUrl: document.getElementById("btnCopyShowcaseUrl"),
   chkMakeCollectionPrivate: document.getElementById("chkMakeCollectionPrivate"),
   profilePrivacyFeedback: document.getElementById("profilePrivacyFeedback"),
+
+  // Settings Cards
+  cardIgdbSettings: document.getElementById("cardIgdbSettings"),
+  cardOfflineAssets: document.getElementById("cardOfflineAssets"),
+  cardBackupRestore: document.getElementById("cardBackupRestore"),
+  cardCatalogSync: document.getElementById("cardCatalogSync"),
 
   // Login Modal Elements
   authModalTabs: document.getElementById("authModalTabs"),
@@ -1710,20 +1712,40 @@ function setupSettingsListeners() {
 }
 
 async function checkSettingsStatus() {
-  try {
-    const res = await apiFetch(`${API_BASE}/api/settings`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data.configured) {
-        elements.igdbStatusBadge.textContent = "IGDB Online";
-        elements.igdbStatusBadge.className = "status-badge-online";
-      } else {
-        elements.igdbStatusBadge.textContent = "Not Configured";
-        elements.igdbStatusBadge.className = "status-badge-offline";
+  const isPublic = Boolean(state.auth && state.auth.is_public);
+  const isAdmin = Boolean(state.auth && state.auth.user && state.auth.user.is_admin);
+
+  // In public web mode, image pulling and Twitch credentials are built into the server
+  if (elements.cardIgdbSettings) {
+    elements.cardIgdbSettings.style.display = isPublic ? "none" : "block";
+  }
+  if (elements.cardOfflineAssets) {
+    elements.cardOfflineAssets.style.display = isPublic ? "none" : "block";
+  }
+  if (elements.cardCatalogSync) {
+    elements.cardCatalogSync.style.display = isPublic ? (isAdmin ? "block" : "none") : "block";
+  }
+  if (elements.cardBackupRestore) {
+    elements.cardBackupRestore.style.display = "block";
+  }
+
+  // Only check Twitch IGDB status in selfhosted mode
+  if (!isPublic) {
+    try {
+      const res = await apiFetch(`${API_BASE}/api/settings`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.configured) {
+          elements.igdbStatusBadge.textContent = "IGDB Online";
+          elements.igdbStatusBadge.className = "status-badge-online";
+        } else {
+          elements.igdbStatusBadge.textContent = "Not Configured";
+          elements.igdbStatusBadge.className = "status-badge-offline";
+        }
       }
+    } catch (err) {
+      console.error("Could not check settings:", err);
     }
-  } catch (err) {
-    console.error("Could not check settings:", err);
   }
 
   // Update profile showcase settings card
@@ -1923,6 +1945,9 @@ function closeWelcomeWizard() {
 }
 
 async function checkWelcomeWizard() {
+  // In public web mode, images are built-in on the server - never prompt users
+  if (state.auth && state.auth.is_public) return;
+
   const dismissed = localStorage.getItem("pbpx_wizard_dismissed") || localStorage.getItem("demoscene_wizard_dismissed");
   if (dismissed) return;
 

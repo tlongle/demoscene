@@ -30,7 +30,7 @@ def main():
     db.init_db()
 
     print("\n" + "═" * 60)
-    print("DEMOSCENE - PlayStation Demo Collector")
+    print("PBPX - PlayStation Demo & Promo Archive")
     print("═" * 60)
     print(f"Desktop:  http://localhost:{settings.PORT}")
     print(f"Mobile:   http://{ip}:{settings.PORT}")

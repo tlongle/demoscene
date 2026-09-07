@@ -35,6 +35,23 @@ async def lifespan(app: FastAPI):
     """Initialize directories and database on startup."""
     settings.ensure_dirs()
     db.init_db()
+
+    # Pre-seed verified catalog on first run if database is fresh
+    try:
+        total_in_db = db.get_stats(user_id=None)["total_demos"]
+        if total_in_db == 0:
+            seed_path = db.get_catalog_seed_path()
+            if seed_path and os.path.exists(seed_path):
+                count = scraper.seed_database_from_file(seed_path)
+                print(f"[PBPX] Auto-seeded {count} verified demo discs.")
+    except Exception as e:
+        print(f"[PBPX Warning] Catalog seeding check encountered: {e}")
+
+    # In public web mode, ensure built-in artwork pack is pulled in background if missing
+    if settings.is_public and asset_pack.count_local_assets() < 100:
+        print("[PBPX Public Mode] Assets missing in storage; starting server-side background pull...")
+        asset_pack.start_asset_pack_download()
+
     yield
 
 
@@ -71,7 +88,7 @@ async def verify_admin_key(
             return {"id": 1, "username": "admin_key", "is_admin": True}
         raise HTTPException(
             status_code=401,
-            detail="Admin authentication required. Please log in."
+            detail="Administrator login required. Please log in as an administrator."
         )
 
     # If self-hosted and no users have been registered yet, allow setup/local access
@@ -80,7 +97,7 @@ async def verify_admin_key(
 
     raise HTTPException(
         status_code=401,
-        detail="Admin authentication required. Please log in."
+        detail="Administrator login required. Please log in as an administrator."
     )
 
 
@@ -378,6 +395,11 @@ def get_settings():
 @app.post("/api/settings", dependencies=[Depends(verify_admin_key)])
 def update_settings(payload: SettingsPayload):
     """Test and update IGDB API credentials, writing to .env."""
+    if settings.is_public:
+        raise HTTPException(
+            status_code=403,
+            detail="Twitch credentials cannot be modified via UI in public web mode."
+        )
     res = boxart_service.save_igdb_credentials(
         payload.twitch_client_id,
         payload.twitch_client_secret
@@ -568,6 +590,11 @@ def trigger_scrape():
 @app.post("/api/boxart/fetch-all", dependencies=[Depends(verify_admin_key)])
 def trigger_boxart_fetch(background_tasks: BackgroundTasks, limit: int = 150):
     """Trigger batch resolution and download of game box art."""
+    if settings.is_public:
+        raise HTTPException(
+            status_code=403,
+            detail="Box art batch fetch is server-managed and unavailable in public web mode."
+        )
     background_tasks.add_task(boxart_service.batch_fetch_boxart, limit=limit)
     return {"success": True, "message": f"Box art download queued for up to {limit} games."}
 
@@ -575,7 +602,10 @@ def trigger_boxart_fetch(background_tasks: BackgroundTasks, limit: int = 150):
 @app.get("/api/assets/pack/status")
 def get_pack_status():
     """Check status of local assets and any active pack download task."""
-    return asset_pack.get_asset_pack_status()
+    status = asset_pack.get_asset_pack_status()
+    if settings.is_public:
+        status["assets_ready"] = True
+    return status
 
 
 class AssetPackDownloadPayload(BaseModel):
@@ -585,6 +615,11 @@ class AssetPackDownloadPayload(BaseModel):
 @app.post("/api/assets/pack/download", dependencies=[Depends(verify_admin_key)])
 def download_asset_pack(payload: Optional[AssetPackDownloadPayload] = None):
     """Trigger 1-click download & extraction of complete pre-packaged artwork bundle."""
+    if settings.is_public:
+        raise HTTPException(
+            status_code=403,
+            detail="Artwork bundle download via UI is disabled in public web mode. Media assets are pre-installed on the server."
+        )
     custom_url = payload.url if payload else None
     res = asset_pack.start_asset_pack_download(custom_url)
     if not res["success"]:
