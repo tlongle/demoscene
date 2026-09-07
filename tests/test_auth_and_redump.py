@@ -189,3 +189,144 @@ def test_redump_disc_import_and_scraper_shield():
     assert preserved_demo["title"] == "Bonus Demo 11 (You)"
     assert preserved_demo["source"] == "redump"
     assert "SCED-54101" in preserved_demo["sced_codes"]
+
+
+def test_public_registration_and_multiuser_isolation(monkeypatch):
+    """Verify open registration in public mode and strictly isolated collections between users."""
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "MODE", "public")
+
+    # 1. Register User A
+    r_reg_a = client.post("/api/auth/register", json={
+        "username": "collector_alice",
+        "password": "alicepassword123"
+    })
+    assert r_reg_a.status_code == 200
+    token_a = r_reg_a.json()["token"]
+    user_a = r_reg_a.json()["user"]
+    assert user_a["username"] == "collector_alice"
+    assert user_a["is_admin"] is False  # Subsequent users are non-admin
+
+    # 2. Register User B
+    r_reg_b = client.post("/api/auth/register", json={
+        "username": "collector_bob",
+        "password": "bobpassword123"
+    })
+    assert r_reg_b.status_code == 200
+    token_b = r_reg_b.json()["token"]
+    user_b = r_reg_b.json()["user"]
+    assert user_b["username"] == "collector_bob"
+
+    # 3. Alice adds disc 1 to her collection
+    r_all_demos = client.get("/api/demos?limit=2")
+    demos = r_all_demos.json()["results"]
+    demo_1_id = demos[0]["id"]
+    demo_2_id = demos[1]["id"]
+
+    r_add_a = client.post(
+        f"/api/collection/{demo_1_id}",
+        json={"status": "owned", "condition": "mint"},
+        headers={"Authorization": f"Bearer {token_a}"}
+    )
+    assert r_add_a.status_code == 200
+
+    # 4. Bob adds disc 2 to his collection
+    r_add_b = client.post(
+        f"/api/collection/{demo_2_id}",
+        json={"status": "owned", "condition": "poor"},
+        headers={"Authorization": f"Bearer {token_b}"}
+    )
+    assert r_add_b.status_code == 200
+
+    # 5. Alice's collection check
+    stats_a = client.get("/api/stats", headers={"Authorization": f"Bearer {token_a}"}).json()
+    assert stats_a["owned_demos"] == 1
+    assert stats_a["conditions"]["mint"] == 1
+
+    alice_detail_demo1 = client.get(f"/api/demos/{demo_1_id}", headers={"Authorization": f"Bearer {token_a}"}).json()
+    assert "default" in alice_detail_demo1["collection"]
+    assert alice_detail_demo1["collection"]["default"]["status"] == "owned"
+
+    alice_detail_demo2 = client.get(f"/api/demos/{demo_2_id}", headers={"Authorization": f"Bearer {token_a}"}).json()
+    assert "default" not in alice_detail_demo2["collection"]
+
+    # 6. Bob's collection check
+    stats_b = client.get("/api/stats", headers={"Authorization": f"Bearer {token_b}"}).json()
+    assert stats_b["owned_demos"] == 1
+    assert stats_b["conditions"]["poor"] == 1
+
+    bob_detail_demo2 = client.get(f"/api/demos/{demo_2_id}", headers={"Authorization": f"Bearer {token_b}"}).json()
+    assert bob_detail_demo2["collection"]["default"]["status"] == "owned"
+
+    bob_detail_demo1 = client.get(f"/api/demos/{demo_1_id}", headers={"Authorization": f"Bearer {token_b}"}).json()
+    assert "default" not in bob_detail_demo1["collection"]
+
+    # 7. Unauthenticated guest check in public mode
+    guest_stats = client.get("/api/stats").json()
+    assert guest_stats["owned_demos"] == 0
+
+    guest_demo1 = client.get(f"/api/demos/{demo_1_id}").json()
+    assert guest_demo1["collection"] == {}
+
+    # 8. Non-admin cannot access admin catalog mutations
+    r_hack_demo = client.post("/api/admin/demos", json={"title": "Hacked Demo"}, headers={"Authorization": f"Bearer {token_a}"})
+    assert r_hack_demo.status_code == 401
+
+
+def test_public_profile_showcase_and_privacy():
+    """Verify public showcase URL /api/users/{username}/collection and privacy toggling."""
+    # Login as alice
+    r_login = client.post("/api/auth/login", json={"username": "collector_alice", "password": "alicepassword123"})
+    token = r_login.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. View public profile as guest
+    r_showcase = client.get("/api/users/collector_alice/collection")
+    assert r_showcase.status_code == 200
+    showcase_data = r_showcase.json()
+    assert showcase_data["username"] == "collector_alice"
+    assert showcase_data["is_private"] is False
+    assert showcase_data["total_owned"] == 1
+    assert len(showcase_data["discs"]) == 1
+
+    # 2. Toggle privacy to private
+    r_privacy = client.post("/api/auth/privacy", json={"is_private": True}, headers=headers)
+    assert r_privacy.status_code == 200
+    assert r_privacy.json()["is_private"] is True
+
+    # 3. Guest (with cleared cookies) visiting private showcase gets hidden collection
+    client.cookies.clear()
+    r_guest_priv = client.get("/api/users/collector_alice/collection")
+    assert r_guest_priv.status_code == 200
+    priv_data = r_guest_priv.json()
+    assert priv_data["is_private"] is True
+    assert "private" in priv_data["message"]
+    assert "discs" not in priv_data
+
+    # 4. Alice herself visiting her own showcase can still view it
+    r_owner_priv = client.get("/api/users/collector_alice/collection", headers=headers)
+    assert r_owner_priv.status_code == 200
+    owner_data = r_owner_priv.json()
+    assert owner_data["is_private"] is False
+    assert owner_data["total_owned"] == 1
+
+
+def test_security_headers_and_auth_rate_limiting():
+    """Verify security headers are attached and auth rate limiter prevents brute-force."""
+    # 1. Verify standard security headers
+    r = client.get("/api/stats")
+    assert r.status_code == 200
+    assert r.headers["x-content-type-options"] == "nosniff"
+    assert r.headers["x-frame-options"] == "SAMEORIGIN"
+    assert r.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+
+    # 2. Rate limiter triggers after exceeding threshold (15 attempts/min)
+    hit_limit = False
+    for i in range(20):
+        r_lim = client.post("/api/auth/login", json={"username": f"attacker_{i}", "password": "bad"}, headers={"X-Forwarded-For": "198.51.100.1"})
+        if r_lim.status_code == 429:
+            hit_limit = True
+            break
+    assert hit_limit, "Rate limiter should return 429 after exceeding limit"
+
+

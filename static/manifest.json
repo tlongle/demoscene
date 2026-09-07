@@ -1,7 +1,7 @@
 {
-  "name": "DEMOSCENE - PlayStation Demo Collector",
-  "short_name": "DEMOSCENE",
-  "description": "Retro PlayStation PS1 & PS2 Demo Disc Collector & Archive",
+  "name": "PBPX - PlayStation Demo & Promo Archive",
+  "short_name": "PBPX",
+  "description": "Universal PlayStation Demo & Promo Disc Archive and Collection Tracker",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#090d15",

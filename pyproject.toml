@@ -1,7 +1,7 @@
 [project]
-name = "demo_scene"
+name = "pbpx"
 version = "2.0.0"
-description = "Track and archive PlayStation PAL demo discs, scans, and box art"
+description = "Universal PlayStation Demo & Promo Archive - Discs, Scans & Box Art"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

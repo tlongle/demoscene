@@ -20,6 +20,9 @@ def get_db_connection(db_path: str = None) -> sqlite3.Connection:
         os.makedirs(parent_dir, exist_ok=True)
     conn = sqlite3.connect(abs_path, timeout=30.0)
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA synchronous = NORMAL")
+    conn.execute("PRAGMA busy_timeout = 5000")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -57,9 +60,40 @@ def init_db(db_path: str = None) -> None:
     )
     """)
 
-    # User collection tracking table
+    # Users and sessions tables for username/password authentication
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL COLLATE NOCASE,
+        password_hash TEXT NOT NULL,
+        salt TEXT NOT NULL,
+        is_admin INTEGER NOT NULL DEFAULT 1,
+        is_private INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    # Migration for users table: add is_private column if missing
+    cur.execute("PRAGMA table_info(users)")
+    user_cols = [c["name"] for c in cur.fetchall()]
+    if "is_private" not in user_cols:
+        cur.execute("ALTER TABLE users ADD COLUMN is_private INTEGER NOT NULL DEFAULT 0")
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS user_sessions (
+        token TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sessions_token ON user_sessions(token)")
+
+    # User collection tracking table (multi-tenant per user_id)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS collection (
+        user_id INTEGER NOT NULL DEFAULT 1,
         demo_id TEXT NOT NULL,
         variant_id TEXT NOT NULL DEFAULT 'default',
         status TEXT NOT NULL DEFAULT 'unowned', -- 'owned', 'wanted', 'unowned'
@@ -69,10 +103,37 @@ def init_db(db_path: str = None) -> None:
         is_working INTEGER DEFAULT 1,          -- 1 or 0
         notes TEXT DEFAULT '',
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (demo_id, variant_id),
+        PRIMARY KEY (user_id, demo_id, variant_id),
         FOREIGN KEY (demo_id) REFERENCES demos(id) ON DELETE CASCADE
     )
     """)
+
+    # Migration for collection table: add user_id column if missing and migrate existing rows to user 1
+    cur.execute("PRAGMA table_info(collection)")
+    coll_cols = [c["name"] for c in cur.fetchall()]
+    if "user_id" not in coll_cols:
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS collection_new (
+            user_id INTEGER NOT NULL DEFAULT 1,
+            demo_id TEXT NOT NULL,
+            variant_id TEXT NOT NULL DEFAULT 'default',
+            status TEXT NOT NULL DEFAULT 'unowned',
+            condition TEXT DEFAULT 'good',
+            has_sleeve INTEGER DEFAULT 1,
+            has_case INTEGER DEFAULT 1,
+            is_working INTEGER DEFAULT 1,
+            notes TEXT DEFAULT '',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, demo_id, variant_id),
+            FOREIGN KEY (demo_id) REFERENCES demos(id) ON DELETE CASCADE
+        )
+        """)
+        cur.execute("""
+        INSERT INTO collection_new (user_id, demo_id, variant_id, status, condition, has_sleeve, has_case, is_working, notes, updated_at)
+        SELECT 1, demo_id, variant_id, status, condition, has_sleeve, has_case, is_working, notes, updated_at FROM collection
+        """)
+        cur.execute("DROP TABLE collection")
+        cur.execute("ALTER TABLE collection_new RENAME TO collection")
 
     # Custom game cover cache table (composite primary key on console + game_name)
     cur.execute("""
@@ -104,29 +165,6 @@ def init_db(db_path: str = None) -> None:
         cur.execute("DROP TABLE game_covers")
         cur.execute("ALTER TABLE game_covers_new RENAME TO game_covers")
 
-    # Users and sessions tables for username/password authentication
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL COLLATE NOCASE,
-        password_hash TEXT NOT NULL,
-        salt TEXT NOT NULL,
-        is_admin INTEGER NOT NULL DEFAULT 1,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-    """)
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS user_sessions (
-        token TEXT PRIMARY KEY,
-        user_id INTEGER NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        expires_at TIMESTAMP NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    )
-    """)
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_sessions_token ON user_sessions(token)")
-
     # Migration for demos table: add source and redump_id columns if missing
     cur.execute("PRAGMA table_info(demos)")
     demo_cols = [c["name"] for c in cur.fetchall()]
@@ -139,8 +177,8 @@ def init_db(db_path: str = None) -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_demos_console ON demos(console)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_demos_section ON demos(section_name)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_demos_title ON demos(title)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_demos_source ON demos(source)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_collection_status ON collection(status)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_collection_user_status ON collection(user_id, status)")
 
     # System metadata & sync watermark tracking
     cur.execute("""
@@ -445,7 +483,7 @@ def save_demos_bulk(demos_list: List[Dict[str, Any]], db_path: str = None) -> in
     return len(demos_list)
 
 
-def get_demo(demo_id: str, db_path: str = None) -> Optional[Dict[str, Any]]:
+def get_demo(demo_id: str, user_id: Optional[int] = 1, db_path: str = None) -> Optional[Dict[str, Any]]:
     """Retrieve full demo details by ID with collection status."""
     conn = get_db_connection(db_path)
     cur = conn.cursor()
@@ -462,11 +500,12 @@ def get_demo(demo_id: str, db_path: str = None) -> Optional[Dict[str, Any]]:
     demo["categories"] = ensure_demo_categories(demo["title"], raw_cats, demo.get("section_name", ""))
     demo["variants"] = json.loads(demo["variants_json"] or "[]")
 
-    cur.execute("SELECT * FROM collection WHERE demo_id = ?", (demo_id,))
-    coll_rows = cur.fetchall()
     collection_map = {}
-    for r in coll_rows:
-        collection_map[r["variant_id"]] = dict(r)
+    if user_id is not None:
+        cur.execute("SELECT * FROM collection WHERE demo_id = ? AND user_id = ?", (demo_id, user_id))
+        coll_rows = cur.fetchall()
+        for r in coll_rows:
+            collection_map[r["variant_id"]] = dict(r)
 
     demo["collection"] = collection_map
     conn.close()
@@ -481,6 +520,7 @@ def search_demos(
     collection_status: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
+    user_id: Optional[int] = 1,
     db_path: str = None
 ) -> Dict[str, Any]:
     """Search and filter demos."""
@@ -514,8 +554,14 @@ def search_demos(
         where_clauses.append("EXISTS (SELECT 1 FROM json_each(d.variants_json) WHERE json_extract(value, '$.country') LIKE ?)")
         params.append(country)
 
-    # Collection filter join
-    join_clause = "LEFT JOIN collection c ON d.id = c.demo_id"
+    # Collection filter join scoped to user_id
+    if user_id is not None:
+        join_clause = "LEFT JOIN collection c ON d.id = c.demo_id AND c.user_id = ?"
+        join_params = [user_id]
+    else:
+        join_clause = "LEFT JOIN collection c ON 1=0"
+        join_params = []
+
     if collection_status and collection_status != "ALL":
         if collection_status == "unowned":
             where_clauses.append("(c.status IS NULL OR c.status = 'unowned')")
@@ -524,9 +570,10 @@ def search_demos(
             params.append(collection_status)
 
     where_sql = " AND ".join(where_clauses)
+    full_params = join_params + params
 
     count_sql = f"SELECT COUNT(DISTINCT d.id) FROM demos d {join_clause} WHERE {where_sql}"
-    cur.execute(count_sql, params)
+    cur.execute(count_sql, full_params)
     total = cur.fetchone()[0]
 
     query_sql = f"""
@@ -546,7 +593,7 @@ def search_demos(
             d.title
         LIMIT ? OFFSET ?
     """
-    cur.execute(query_sql, params + [limit, offset])
+    cur.execute(query_sql, full_params + [limit, offset])
     rows = cur.fetchall()
 
     results = []
@@ -588,6 +635,7 @@ def update_collection(
     has_case: int = 1,
     is_working: int = 1,
     notes: str = "",
+    user_id: int = 1,
     db_path: str = None
 ) -> Dict[str, Any]:
     """Update or insert collection record for a demo/variant."""
@@ -596,9 +644,9 @@ def update_collection(
 
     cur.execute("""
     INSERT INTO collection (
-        demo_id, variant_id, status, condition, has_sleeve, has_case, is_working, notes, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(demo_id, variant_id) DO UPDATE SET
+        user_id, demo_id, variant_id, status, condition, has_sleeve, has_case, is_working, notes, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(user_id, demo_id, variant_id) DO UPDATE SET
         status=excluded.status,
         condition=excluded.condition,
         has_sleeve=excluded.has_sleeve,
@@ -606,11 +654,12 @@ def update_collection(
         is_working=excluded.is_working,
         notes=excluded.notes,
         updated_at=CURRENT_TIMESTAMP
-    """, (demo_id, variant_id, status, condition, has_sleeve, has_case, is_working, notes))
+    """, (user_id, demo_id, variant_id, status, condition, has_sleeve, has_case, is_working, notes))
 
     conn.commit()
     conn.close()
     return {
+        "user_id": user_id,
         "demo_id": demo_id,
         "variant_id": variant_id,
         "status": status,
@@ -626,6 +675,7 @@ def bulk_update_collection(
     demo_ids: List[str],
     updates: Dict[str, Any],
     variant_id: str = "default",
+    user_id: int = 1,
     db_path: str = None
 ) -> int:
     """
@@ -639,7 +689,7 @@ def bulk_update_collection(
 
     count = 0
     for did in demo_ids:
-        cur.execute("SELECT * FROM collection WHERE demo_id = ? AND variant_id = ?", (did, variant_id))
+        cur.execute("SELECT * FROM collection WHERE user_id = ? AND demo_id = ? AND variant_id = ?", (user_id, did, variant_id))
         row = cur.fetchone()
 
         status = updates.get("status", row["status"] if row else "owned")
@@ -651,9 +701,9 @@ def bulk_update_collection(
 
         cur.execute("""
         INSERT INTO collection (
-            demo_id, variant_id, status, condition, has_sleeve, has_case, is_working, notes, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(demo_id, variant_id) DO UPDATE SET
+            user_id, demo_id, variant_id, status, condition, has_sleeve, has_case, is_working, notes, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(user_id, demo_id, variant_id) DO UPDATE SET
             status=excluded.status,
             condition=excluded.condition,
             has_sleeve=excluded.has_sleeve,
@@ -661,7 +711,7 @@ def bulk_update_collection(
             is_working=excluded.is_working,
             notes=excluded.notes,
             updated_at=CURRENT_TIMESTAMP
-        """, (did, variant_id, status, condition, has_sleeve, has_case, is_working, notes))
+        """, (user_id, did, variant_id, status, condition, has_sleeve, has_case, is_working, notes))
         count += 1
 
     conn.commit()
@@ -669,12 +719,19 @@ def bulk_update_collection(
     return count
 
 
-def get_stats(db_path: str = None) -> Dict[str, Any]:
+def get_stats(user_id: Optional[int] = 1, db_path: str = None) -> Dict[str, Any]:
     """Calculate detailed collection statistics."""
     conn = get_db_connection(db_path)
     cur = conn.cursor()
 
-    cur.execute("""
+    if user_id is not None:
+        join_clause = "LEFT JOIN collection c ON d.id = c.demo_id AND c.user_id = ?"
+        join_params = [user_id]
+    else:
+        join_clause = "LEFT JOIN collection c ON 1=0"
+        join_params = []
+
+    cur.execute(f"""
         SELECT 
             COUNT(DISTINCT d.id) as total_demos,
             COUNT(DISTINCT CASE WHEN d.console = 'PS1' THEN d.id END) as total_ps1,
@@ -687,27 +744,30 @@ def get_stats(db_path: str = None) -> Dict[str, Any]:
             COUNT(DISTINCT CASE WHEN c.status = 'owned' AND c.has_case = 1 THEN d.id END) as count_case,
             COUNT(DISTINCT CASE WHEN c.status = 'owned' AND c.is_working = 1 THEN d.id END) as count_working
         FROM demos d
-        LEFT JOIN collection c ON d.id = c.demo_id
-    """)
+        {join_clause}
+    """, join_params)
     totals = dict(cur.fetchone())
 
-    cur.execute("""
-        SELECT condition, COUNT(*) as count 
-        FROM collection 
-        WHERE status = 'owned' 
-        GROUP BY condition
-    """)
-    cond_rows = dict(cur.fetchall())
+    if user_id is not None:
+        cur.execute("""
+            SELECT condition, COUNT(*) as count 
+            FROM collection 
+            WHERE status = 'owned' AND user_id = ?
+            GROUP BY condition
+        """, (user_id,))
+        cond_rows = dict(cur.fetchall())
+    else:
+        cond_rows = {}
 
-    cur.execute("""
+    cur.execute(f"""
         SELECT d.console, d.section_name, COUNT(DISTINCT d.id) as total,
                COUNT(DISTINCT CASE WHEN c.status = 'owned' THEN d.id END) as owned,
                COUNT(DISTINCT CASE WHEN c.status = 'wanted' THEN d.id END) as wanted
         FROM demos d
-        LEFT JOIN collection c ON d.id = c.demo_id
+        {join_clause}
         GROUP BY d.console, d.section_name
         ORDER BY d.console, d.section_name
-    """)
+    """, join_params)
     series_breakdown = [dict(r) for r in cur.fetchall()]
     conn.close()
 
@@ -737,17 +797,17 @@ def get_stats(db_path: str = None) -> Dict[str, Any]:
     }
 
 
-def export_collection_data(db_path: str = None) -> Dict[str, Any]:
+def export_collection_data(user_id: int = 1, db_path: str = None) -> Dict[str, Any]:
     """Export all collection records for backup."""
     conn = get_db_connection(db_path)
     cur = conn.cursor()
-    cur.execute("SELECT * FROM collection")
+    cur.execute("SELECT * FROM collection WHERE user_id = ?", (user_id,))
     rows = [dict(r) for r in cur.fetchall()]
     conn.close()
-    return {"version": 1, "collection": rows}
+    return {"version": 1, "user_id": user_id, "collection": rows}
 
 
-def import_collection_data(data: Dict[str, Any], db_path: str = None) -> int:
+def import_collection_data(data: Dict[str, Any], user_id: int = 1, db_path: str = None) -> int:
     """Import collection records from JSON backup."""
     records = data.get("collection", [])
     conn = get_db_connection(db_path)
@@ -756,9 +816,9 @@ def import_collection_data(data: Dict[str, Any], db_path: str = None) -> int:
     for r in records:
         cur.execute("""
         INSERT INTO collection (
-            demo_id, variant_id, status, condition, has_sleeve, has_case, is_working, notes, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(demo_id, variant_id) DO UPDATE SET
+            user_id, demo_id, variant_id, status, condition, has_sleeve, has_case, is_working, notes, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(user_id, demo_id, variant_id) DO UPDATE SET
             status=excluded.status,
             condition=excluded.condition,
             has_sleeve=excluded.has_sleeve,
@@ -767,6 +827,7 @@ def import_collection_data(data: Dict[str, Any], db_path: str = None) -> int:
             notes=excluded.notes,
             updated_at=CURRENT_TIMESTAMP
         """, (
+            user_id,
             r["demo_id"],
             r.get("variant_id", "default"),
             r.get("status", "owned"),
@@ -782,9 +843,12 @@ def import_collection_data(data: Dict[str, Any], db_path: str = None) -> int:
     return count
 
 
-def get_collection_games(db_path: str = None) -> List[Dict[str, Any]]:
+def get_collection_games(user_id: Optional[int] = 1, db_path: str = None) -> List[Dict[str, Any]]:
     """Retrieve all unique playable games contained within owned collection demo discs."""
     from app.services.intel import get_game_intel
+
+    if user_id is None:
+        return []
 
     conn = get_db_connection(db_path)
     cur = conn.cursor()
@@ -792,8 +856,8 @@ def get_collection_games(db_path: str = None) -> List[Dict[str, Any]]:
         SELECT d.id, d.title, d.console, d.section_name, d.catalog_line, d.sced_codes_json, d.contents_json, d.primary_thumbnail
         FROM collection c
         JOIN demos d ON c.demo_id = d.id
-        WHERE c.status = 'owned'
-    """)
+        WHERE c.status = 'owned' AND c.user_id = ?
+    """, (user_id,))
     rows = cur.fetchall()
     conn.close()
 
@@ -998,3 +1062,23 @@ def delete_demo(demo_id: str, db_path: str = None) -> bool:
     conn.commit()
     conn.close()
     return deleted
+
+
+def get_user_by_username(username: str, db_path: str = None) -> Optional[Dict[str, Any]]:
+    """Retrieve user record by username (case-insensitive)."""
+    conn = get_db_connection(db_path)
+    cur = conn.cursor()
+    cur.execute("SELECT id, username, is_admin, is_private, created_at FROM users WHERE username = ?", (username.strip(),))
+    row = cur.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_user_privacy(user_id: int, is_private: bool, db_path: str = None) -> None:
+    """Update user collection privacy preference."""
+    conn = get_db_connection(db_path)
+    cur = conn.cursor()
+    cur.execute("UPDATE users SET is_private = ? WHERE id = ?", (1 if is_private else 0, user_id))
+    conn.commit()
+    conn.close()
+

@@ -1,5 +1,5 @@
 /**
- * DEMOSCENE - PlayStation PAL Demos Collection Manager
+ * PBPX - PlayStation Demo & Promo Archive
  */
 
 const API_BASE = "";
@@ -74,8 +74,8 @@ function escapeAttr(str) {
 }
 
 async function apiFetch(url, options = {}) {
-  const sessionToken = localStorage.getItem("demoscene_session_token") || "";
-  const apiKey = localStorage.getItem("demoscene_api_key") || "";
+  const sessionToken = localStorage.getItem("pbpx_session_token") || localStorage.getItem("demoscene_session_token") || "";
+  const apiKey = localStorage.getItem("pbpx_api_key") || localStorage.getItem("demoscene_api_key") || "";
   const opts = { ...options };
   opts.headers = { ...(opts.headers || {}) };
   if (sessionToken) {
@@ -85,10 +85,12 @@ async function apiFetch(url, options = {}) {
     opts.headers["X-API-Key"] = apiKey;
   }
   const res = await fetch(url, opts);
-  if (res.status === 401) {
-    showToast("Please log in to perform this action.", "warning");
-    if (typeof openLoginModal === "function") {
-      openLoginModal();
+  if (res.status === 401 && !opts.silent401) {
+    if (opts.method && opts.method.toUpperCase() !== "GET") {
+      showToast("Please log in to perform this action.", "warning");
+      if (typeof openLoginModal === "function") {
+        openLoginModal();
+      }
     }
   }
   return res;
@@ -96,11 +98,15 @@ async function apiFetch(url, options = {}) {
 
 // Application State
 const state = {
-  currentPage: "archive", // 'archive', 'collection', 'admin', 'settings'
+  currentPage: "archive", // 'archive', 'collection', 'admin', 'settings', 'showcase'
+  authMode: "login", // 'login', 'register', 'setup'
   auth: {
     authenticated: false,
     user: null,
-    setup_needed: false
+    setup_needed: false,
+    mode: "selfhosted",
+    is_public: false,
+    registration_allowed: false
   },
 
   archive: {
@@ -112,7 +118,7 @@ const state = {
     console: "ALL",
     section: "ALL",
     country: "ALL",
-    layout: localStorage.getItem("demoscene_archive_layout") || localStorage.getItem("scene_archive_layout") || "grid",
+    layout: localStorage.getItem("pbpx_archive_layout") || localStorage.getItem("demoscene_archive_layout") || localStorage.getItem("scene_archive_layout") || "grid",
     isLoading: false,
     debounceTimer: null
   },
@@ -124,7 +130,7 @@ const state = {
     console: "ALL",
     condition: "ALL",
     checklist: "ALL",
-    layout: localStorage.getItem("demoscene_collection_layout") || localStorage.getItem("scene_collection_layout") || "list",
+    layout: localStorage.getItem("pbpx_collection_layout") || localStorage.getItem("demoscene_collection_layout") || localStorage.getItem("scene_collection_layout") || "list",
     isBulkMode: false,
     selectedIds: new Set(),
     isLoading: false,
@@ -151,8 +157,13 @@ const elements = {
   navCountArchive: document.getElementById("navCountArchive"),
   navCountOwned: document.getElementById("navCountOwned"),
 
+  // Brand Header
+  btnBrandHome: document.getElementById("btnBrandHome"),
+
   // Auth Header Controls
   btnOpenLoginModal: document.getElementById("btnOpenLoginModal"),
+  btnOpenRegisterModal: document.getElementById("btnOpenRegisterModal"),
+  btnMyShowcase: document.getElementById("btnMyShowcase"),
   userBadgeWrap: document.getElementById("userBadgeWrap"),
   lblUserBadge: document.getElementById("lblUserBadge"),
   btnHeaderLogout: document.getElementById("btnHeaderLogout"),
@@ -162,8 +173,40 @@ const elements = {
   pageCollection: document.getElementById("pageCollection"),
   pageAdmin: document.getElementById("pageAdmin"),
   pageSettings: document.getElementById("pageSettings"),
+  pagePublicProfile: document.getElementById("pagePublicProfile"),
+
+  // Showcase Elements
+  showcaseTitle: document.getElementById("showcaseTitle"),
+  showcaseSubtitle: document.getElementById("showcaseSubtitle"),
+  btnShowcaseBack: document.getElementById("btnShowcaseBack"),
+  showcasePrivateNotice: document.getElementById("showcasePrivateNotice"),
+  showcasePrivateMsg: document.getElementById("showcasePrivateMsg"),
+  btnShowcaseBrowseArchive: document.getElementById("btnShowcaseBrowseArchive"),
+  showcaseBody: document.getElementById("showcaseBody"),
+  showcaseOwnedCount: document.getElementById("showcaseOwnedCount"),
+  showcaseCompletionRate: document.getElementById("showcaseCompletionRate"),
+  showcasePs1Count: document.getElementById("showcasePs1Count"),
+  showcasePs2Count: document.getElementById("showcasePs2Count"),
+  showcaseGalleryTitle: document.getElementById("showcaseGalleryTitle"),
+  showcaseResultsCount: document.getElementById("showcaseResultsCount"),
+  showcaseContainer: document.getElementById("showcaseContainer"),
+
+  // Collection Guest Prompt
+  colGuestPrompt: document.getElementById("colGuestPrompt"),
+  btnColGuestLogin: document.getElementById("btnColGuestLogin"),
+
+  // Profile & Privacy Settings
+  cardProfileSettings: document.getElementById("cardProfileSettings"),
+  lblProfilePrivacyBadge: document.getElementById("lblProfilePrivacyBadge"),
+  txtShowcaseUrl: document.getElementById("txtShowcaseUrl"),
+  btnCopyShowcaseUrl: document.getElementById("btnCopyShowcaseUrl"),
+  chkMakeCollectionPrivate: document.getElementById("chkMakeCollectionPrivate"),
+  profilePrivacyFeedback: document.getElementById("profilePrivacyFeedback"),
 
   // Login Modal Elements
+  authModalTabs: document.getElementById("authModalTabs"),
+  tabAuthLogin: document.getElementById("tabAuthLogin"),
+  tabAuthRegister: document.getElementById("tabAuthRegister"),
   loginModal: document.getElementById("loginModal"),
   loginModalTitle: document.getElementById("loginModalTitle"),
   loginModalDesc: document.getElementById("loginModalDesc"),
@@ -356,26 +399,77 @@ document.addEventListener("DOMContentLoaded", () => {
   fetchArchiveDemos(true);
   checkSettingsStatus();
   checkWelcomeWizard();
-  checkAuthStatus();
+  checkAuthStatus().then(() => {
+    handleHashRoute();
+  });
 });
 
 /* ==========================================================================
-   Navigation
+   Navigation & Hash Routing
    ========================================================================== */
+function handleHashRoute() {
+  const hash = window.location.hash || "";
+  const match = hash.match(/^#u\/([^/?#]+)/);
+  if (match) {
+    const username = decodeURIComponent(match[1]);
+    navigateTo("showcase", username);
+  } else if (state.currentPage === "showcase") {
+    navigateTo("archive");
+  }
+}
+
 function setupNavigation() {
+  if (elements.btnBrandHome) {
+    elements.btnBrandHome.addEventListener("click", () => {
+      if (window.location.hash.startsWith("#u/")) {
+        history.pushState(null, "", window.location.pathname + window.location.search);
+      }
+      navigateTo("archive");
+    });
+  }
+
   elements.mainNavTabs.querySelectorAll(".nav-tab").forEach(tab => {
     tab.addEventListener("click", () => {
       const targetPage = tab.getAttribute("data-page");
+      if (window.location.hash.startsWith("#u/")) {
+        history.pushState(null, "", window.location.pathname + window.location.search);
+      }
       navigateTo(targetPage);
     });
   });
 
-  elements.btnColGoToArchive.addEventListener("click", () => {
-    navigateTo("archive");
-  });
+  if (elements.btnColGoToArchive) {
+    elements.btnColGoToArchive.addEventListener("click", () => {
+      navigateTo("archive");
+    });
+  }
+
+  if (elements.btnMyShowcase) {
+    elements.btnMyShowcase.addEventListener("click", () => {
+      if (state.auth && state.auth.user) {
+        window.location.hash = `#u/${encodeURIComponent(state.auth.user.username)}`;
+      }
+    });
+  }
+
+  if (elements.btnShowcaseBack) {
+    elements.btnShowcaseBack.addEventListener("click", () => {
+      history.pushState(null, "", window.location.pathname + window.location.search);
+      navigateTo("archive");
+    });
+  }
+
+  if (elements.btnShowcaseBrowseArchive) {
+    elements.btnShowcaseBrowseArchive.addEventListener("click", () => {
+      history.pushState(null, "", window.location.pathname + window.location.search);
+      navigateTo("archive");
+    });
+  }
+
+  window.addEventListener("hashchange", handleHashRoute);
 }
 
-function navigateTo(pageName) {
+function navigateTo(pageName, param) {
   state.currentPage = pageName;
 
   // Update nav tabs
@@ -392,6 +486,11 @@ function navigateTo(pageName) {
   elements.pageCollection.style.display = pageName === "collection" ? "block" : "none";
   if (elements.pageAdmin) elements.pageAdmin.style.display = pageName === "admin" ? "block" : "none";
   elements.pageSettings.style.display = pageName === "settings" ? "block" : "none";
+  if (elements.pagePublicProfile) elements.pagePublicProfile.style.display = pageName === "showcase" ? "block" : "none";
+
+  if (pageName !== "showcase" && window.location.hash.startsWith("#u/")) {
+    history.pushState(null, "", window.location.pathname + window.location.search);
+  }
 
   if (pageName === "collection") {
     loadStats();
@@ -401,6 +500,8 @@ function navigateTo(pageName) {
     populateUploadDiscDropdown();
   } else if (pageName === "settings") {
     checkSettingsStatus();
+  } else if (pageName === "showcase") {
+    loadPublicShowcase(param);
   }
 }
 
@@ -455,7 +556,7 @@ function setupArchiveListeners() {
 
 function setArchiveLayout(layout) {
   state.archive.layout = layout;
-  localStorage.setItem("demoscene_archive_layout", layout);
+  localStorage.setItem("pbpx_archive_layout", layout);
   
   if (layout === "list") {
     elements.btnArchiveViewList.classList.add("active");
@@ -493,7 +594,7 @@ async function fetchArchiveDemos(reset = false) {
   });
 
   try {
-    const res = await fetch(`${API_BASE}/api/demos?${params.toString()}`);
+    const res = await apiFetch(`${API_BASE}/api/demos?${params.toString()}`);
     if (!res.ok) throw new Error("Failed to fetch archive discs");
     const data = await res.json();
 
@@ -806,11 +907,17 @@ function setupCollectionListeners() {
   elements.btnCloseSingleEdit.addEventListener("click", () => closeModal(elements.singleEditModal));
   elements.btnCancelSingleEdit.addEventListener("click", () => closeModal(elements.singleEditModal));
   elements.btnSaveSingleEdit.addEventListener("click", handleSaveSingleEdit);
+
+  if (elements.btnColGuestLogin) {
+    elements.btnColGuestLogin.addEventListener("click", () => {
+      openLoginModal();
+    });
+  }
 }
 
 function setCollectionLayout(layout) {
   state.collection.layout = layout;
-  localStorage.setItem("demoscene_collection_layout", layout);
+  localStorage.setItem("pbpx_collection_layout", layout);
 
   if (layout === "grid") {
     elements.btnColViewCards.classList.add("active");
@@ -844,7 +951,7 @@ async function fetchCollectionDemos() {
   });
 
   try {
-    const res = await fetch(`${API_BASE}/api/demos?${params.toString()}`);
+    const res = await apiFetch(`${API_BASE}/api/demos?${params.toString()}`);
     if (!res.ok) throw new Error("Failed to fetch collection");
     const data = await res.json();
 
@@ -870,7 +977,13 @@ async function fetchCollectionDemos() {
     state.collection.total = list.length;
 
     renderCollectionDemos(list);
-    elements.colEmptyState.style.display = list.length === 0 ? "block" : "none";
+    if (state.auth && state.auth.is_public && !state.auth.authenticated) {
+      if (elements.colGuestPrompt) elements.colGuestPrompt.style.display = "block";
+      elements.colEmptyState.style.display = "none";
+    } else {
+      if (elements.colGuestPrompt) elements.colGuestPrompt.style.display = "none";
+      elements.colEmptyState.style.display = list.length === 0 ? "block" : "none";
+    }
   } catch (err) {
     console.error("Error fetching collection:", err);
   } finally {
@@ -1383,7 +1496,7 @@ async function handleApplyAdvancedBulkEdit() {
    ========================================================================== */
 async function loadStats() {
   try {
-    const res = await fetch(`${API_BASE}/api/stats`);
+    const res = await apiFetch(`${API_BASE}/api/stats`);
     if (!res.ok) return;
     const stats = await res.json();
     state.stats = stats;
@@ -1473,7 +1586,7 @@ async function loadStats() {
    ========================================================================== */
 async function loadCollectionGames() {
   try {
-    const res = await fetch(`${API_BASE}/api/collection/games`);
+    const res = await apiFetch(`${API_BASE}/api/collection/games`);
     if (!res.ok) return;
     const games = await res.json();
     state.collectionGames = games;
@@ -1587,25 +1700,97 @@ function setupSettingsListeners() {
   elements.btnImportJson.addEventListener("click", () => elements.importFileInput.click());
   elements.importFileInput.addEventListener("change", handleImportBackup);
   elements.btnSyncScrape.addEventListener("click", handleSyncScrape);
+
+  if (elements.chkMakeCollectionPrivate) {
+    elements.chkMakeCollectionPrivate.addEventListener("change", handlePrivacyToggle);
+  }
+  if (elements.btnCopyShowcaseUrl) {
+    elements.btnCopyShowcaseUrl.addEventListener("click", handleCopyShowcaseUrl);
+  }
 }
 
 async function checkSettingsStatus() {
   try {
-    const res = await fetch(`${API_BASE}/api/settings`);
-    if (!res.ok) return;
-    const data = await res.json();
-
-    if (data.configured) {
-      elements.igdbStatusBadge.textContent = "IGDB Online";
-      elements.igdbStatusBadge.className = "status-badge-online";
-    } else {
-      elements.igdbStatusBadge.textContent = "Not Configured";
-      elements.igdbStatusBadge.className = "status-badge-offline";
+    const res = await apiFetch(`${API_BASE}/api/settings`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.configured) {
+        elements.igdbStatusBadge.textContent = "IGDB Online";
+        elements.igdbStatusBadge.className = "status-badge-online";
+      } else {
+        elements.igdbStatusBadge.textContent = "Not Configured";
+        elements.igdbStatusBadge.className = "status-badge-offline";
+      }
     }
   } catch (err) {
     console.error("Could not check settings:", err);
   }
+
+  // Update profile showcase settings card
+  if (state.auth && state.auth.user) {
+    if (elements.cardProfileSettings) elements.cardProfileSettings.style.display = "block";
+    if (elements.txtShowcaseUrl) {
+      elements.txtShowcaseUrl.value = `${window.location.origin}/#u/${encodeURIComponent(state.auth.user.username)}`;
+    }
+    if (elements.chkMakeCollectionPrivate) {
+      elements.chkMakeCollectionPrivate.checked = Boolean(state.auth.user.is_private);
+    }
+    if (elements.lblProfilePrivacyBadge) {
+      elements.lblProfilePrivacyBadge.textContent = state.auth.user.is_private ? "Private" : "Public";
+      elements.lblProfilePrivacyBadge.style.background = state.auth.user.is_private ? "var(--accent-red)" : "var(--ps1-grey-panel)";
+    }
+  } else {
+    if (elements.cardProfileSettings) elements.cardProfileSettings.style.display = "none";
+  }
+
   checkAuthStatus();
+}
+
+async function handleCopyShowcaseUrl() {
+  if (!elements.txtShowcaseUrl) return;
+  const url = elements.txtShowcaseUrl.value;
+  if (!url) return;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(url);
+    } else {
+      elements.txtShowcaseUrl.select();
+      document.execCommand("copy");
+    }
+    showToast("Showcase link copied to clipboard!", "success");
+  } catch (err) {
+    elements.txtShowcaseUrl.select();
+    document.execCommand("copy");
+    showToast("Showcase link copied!", "info");
+  }
+}
+
+async function handlePrivacyToggle(e) {
+  const isPrivate = e.target.checked;
+  try {
+    const res = await apiFetch(`${API_BASE}/api/auth/privacy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_private: isPrivate })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(data.message || (isPrivate ? "Collection set to private." : "Collection is now public."), "success");
+      if (state.auth && state.auth.user) {
+        state.auth.user.is_private = isPrivate ? 1 : 0;
+      }
+      if (elements.lblProfilePrivacyBadge) {
+        elements.lblProfilePrivacyBadge.textContent = isPrivate ? "Private" : "Public";
+        elements.lblProfilePrivacyBadge.style.background = isPrivate ? "var(--accent-red)" : "var(--ps1-grey-panel)";
+      }
+    } else {
+      showToast(data.detail || "Could not update privacy setting.", "error");
+      e.target.checked = !isPrivate;
+    }
+  } catch (err) {
+    showToast(`Failed to update privacy: ${err.message}`, "error");
+    e.target.checked = !isPrivate;
+  }
 }
 
 
@@ -1734,11 +1919,11 @@ function closeWelcomeWizard() {
   if (elements.welcomeWizardModal) {
     closeModal(elements.welcomeWizardModal);
   }
-  localStorage.setItem("demoscene_wizard_dismissed", "true");
+  localStorage.setItem("pbpx_wizard_dismissed", "true");
 }
 
 async function checkWelcomeWizard() {
-  const dismissed = localStorage.getItem("demoscene_wizard_dismissed");
+  const dismissed = localStorage.getItem("pbpx_wizard_dismissed") || localStorage.getItem("demoscene_wizard_dismissed");
   if (dismissed) return;
 
   try {
@@ -1778,7 +1963,7 @@ async function handleExportBackup() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `demoscene-collection-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `pbpx-collection-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
     showToast("Collection ledger exported successfully.", "success");
@@ -1908,7 +2093,7 @@ async function openDetailModal(demoId) {
   elements.detailModalContent.innerHTML = "<p>Loading disc details &amp; box art...</p>";
 
   try {
-    const res = await fetch(`${API_BASE}/api/demos/${encodeURIComponent(demoId)}`);
+    const res = await apiFetch(`${API_BASE}/api/demos/${encodeURIComponent(demoId)}`);
     if (!res.ok) throw new Error("Could not load demo disc");
     const demo = await res.json();
     state.activeDemo = demo;
@@ -2183,21 +2368,45 @@ async function saveModalCollectionState(demo, overrideStatus = null) {
    ========================================================================== */
 async function checkAuthStatus() {
   try {
-    const res = await apiFetch(`${API_BASE}/api/auth/me`);
+    const res = await apiFetch(`${API_BASE}/api/auth/me`, { silent401: true });
     const data = await res.json();
     state.auth = data;
 
     if (data.authenticated && data.user) {
       if (elements.btnOpenLoginModal) elements.btnOpenLoginModal.style.display = "none";
+      if (elements.btnOpenRegisterModal) elements.btnOpenRegisterModal.style.display = "none";
       if (elements.userBadgeWrap) elements.userBadgeWrap.style.display = "flex";
-      if (elements.lblUserBadge) elements.lblUserBadge.textContent = `👤 ${data.user.username}`;
-      if (elements.navTabAdmin && data.user.is_admin) {
-        elements.navTabAdmin.style.display = "inline-flex";
+      if (elements.lblUserBadge) elements.lblUserBadge.textContent = data.user.username;
+      if (elements.navTabAdmin) {
+        elements.navTabAdmin.style.display = data.user.is_admin ? "inline-flex" : "none";
+      }
+      if (elements.colGuestPrompt) elements.colGuestPrompt.style.display = "none";
+
+      if (elements.cardProfileSettings) {
+        elements.cardProfileSettings.style.display = "block";
+        if (elements.txtShowcaseUrl) {
+          elements.txtShowcaseUrl.value = `${window.location.origin}/#u/${encodeURIComponent(data.user.username)}`;
+        }
+        if (elements.chkMakeCollectionPrivate) {
+          elements.chkMakeCollectionPrivate.checked = Boolean(data.user.is_private);
+        }
+        if (elements.lblProfilePrivacyBadge) {
+          elements.lblProfilePrivacyBadge.textContent = data.user.is_private ? "Private" : "Public";
+          elements.lblProfilePrivacyBadge.style.background = data.user.is_private ? "var(--accent-red)" : "var(--ps1-grey-panel)";
+        }
       }
     } else {
       if (elements.btnOpenLoginModal) elements.btnOpenLoginModal.style.display = "inline-flex";
+      if (elements.btnOpenRegisterModal) {
+        elements.btnOpenRegisterModal.style.display = data.registration_allowed ? "inline-flex" : "none";
+      }
       if (elements.userBadgeWrap) elements.userBadgeWrap.style.display = "none";
       if (elements.navTabAdmin) elements.navTabAdmin.style.display = "none";
+      if (elements.cardProfileSettings) elements.cardProfileSettings.style.display = "none";
+
+      if (elements.colGuestPrompt) {
+        elements.colGuestPrompt.style.display = data.is_public ? "block" : "none";
+      }
 
       if (data.setup_needed) {
         openSetupModal();
@@ -2208,25 +2417,53 @@ async function checkAuthStatus() {
   }
 }
 
+function setAuthModalMode(mode) {
+  state.authMode = mode;
+  if (!elements.loginModal) return;
+
+  if (mode === "setup") {
+    if (elements.authModalTabs) elements.authModalTabs.style.display = "none";
+    elements.loginModalTitle.textContent = "Setup Master Account";
+    elements.loginModalDesc.textContent = "Welcome to PBPX! Please create your master administrator account to get started.";
+    elements.btnSubmitLogin.textContent = "Create Master Account";
+    elements.txtLoginUsername.value = "admin";
+  } else if (mode === "register") {
+    if (elements.authModalTabs) elements.authModalTabs.style.display = "inline-flex";
+    if (elements.tabAuthRegister) elements.tabAuthRegister.classList.add("active");
+    if (elements.tabAuthLogin) elements.tabAuthLogin.classList.remove("active");
+    elements.loginModalTitle.textContent = "Create Account";
+    elements.loginModalDesc.textContent = "Register a new collector account to start tracking your discs.";
+    elements.btnSubmitLogin.textContent = "Create Account";
+  } else {
+    // login
+    if (elements.authModalTabs) elements.authModalTabs.style.display = "inline-flex";
+    if (elements.tabAuthLogin) elements.tabAuthLogin.classList.add("active");
+    if (elements.tabAuthRegister) elements.tabAuthRegister.classList.remove("active");
+    elements.loginModalTitle.textContent = "Account Login";
+    elements.loginModalDesc.textContent = "Log in with your username and password to manage your collection.";
+    elements.btnSubmitLogin.textContent = "Log In";
+  }
+  elements.loginFeedback.style.display = "none";
+  elements.txtLoginPassword.value = "";
+}
+
 function openLoginModal() {
   if (!elements.loginModal) return;
-  elements.loginModalTitle.textContent = "Account Login";
-  elements.loginModalDesc.textContent = "Log in with your username and password to manage your collection and master catalog.";
-  elements.btnSubmitLogin.textContent = "Log In";
-  elements.loginFeedback.style.display = "none";
+  setAuthModalMode("login");
   elements.txtLoginUsername.value = "";
-  elements.txtLoginPassword.value = "";
+  openModal(elements.loginModal);
+}
+
+function openRegisterModal() {
+  if (!elements.loginModal) return;
+  setAuthModalMode("register");
+  elements.txtLoginUsername.value = "";
   openModal(elements.loginModal);
 }
 
 function openSetupModal() {
   if (!elements.loginModal) return;
-  elements.loginModalTitle.textContent = "Setup Master Account";
-  elements.loginModalDesc.textContent = "Welcome to DEMOSCENE! Please create your master administrator account to get started.";
-  elements.btnSubmitLogin.textContent = "Create Master Account";
-  elements.loginFeedback.style.display = "none";
-  elements.txtLoginUsername.value = "admin";
-  elements.txtLoginPassword.value = "";
+  setAuthModalMode("setup");
   openModal(elements.loginModal);
 }
 
@@ -2239,7 +2476,12 @@ async function handleLoginSubmit() {
   }
 
   const isSetup = state.auth && state.auth.setup_needed;
-  const endpoint = isSetup ? "/api/auth/setup" : "/api/auth/login";
+  let endpoint = "/api/auth/login";
+  if (isSetup) {
+    endpoint = "/api/auth/setup";
+  } else if (state.authMode === "register") {
+    endpoint = "/api/auth/register";
+  }
 
   try {
     const res = await fetch(`${API_BASE}${endpoint}`, {
@@ -2250,13 +2492,25 @@ async function handleLoginSubmit() {
     const data = await res.json();
     if (res.ok && data.success) {
       if (data.token) {
-        localStorage.setItem("demoscene_session_token", data.token);
+        localStorage.setItem("pbpx_session_token", data.token);
       }
       closeModal(elements.loginModal);
-      showToast(isSetup ? "Master Admin account created!" : `Welcome back, ${data.user.username}!`, "success");
+      const msg = isSetup
+        ? "Master Admin account created!"
+        : (state.authMode === "register"
+            ? `Account created! Welcome to PBPX, ${data.user.username}!`
+            : `Welcome back, ${data.user.username}!`);
+      showToast(msg, "success");
       await checkAuthStatus();
       if (state.currentPage === "admin") {
         populateUploadDiscDropdown();
+      }
+      loadStats();
+      if (state.currentPage === "collection") {
+        fetchCollectionDemos();
+        loadCollectionGames();
+      } else if (state.currentPage === "archive") {
+        fetchArchiveDemos(false);
       }
     } else {
       showFormFeedback(elements.loginFeedback, data.detail || "Authentication failed", "error");
@@ -2270,20 +2524,167 @@ async function handleLogout() {
   try {
     await apiFetch(`${API_BASE}/api/auth/logout`, { method: "POST" });
   } catch (e) {}
+  localStorage.removeItem("pbpx_session_token");
   localStorage.removeItem("demoscene_session_token");
+  state.auth = {
+    authenticated: false,
+    user: null,
+    setup_needed: false,
+    mode: state.auth ? state.auth.mode : "selfhosted",
+    is_public: state.auth ? state.auth.is_public : false,
+    registration_allowed: state.auth ? state.auth.registration_allowed : false
+  };
   showToast("Logged out successfully.", "info");
-  if (state.currentPage === "admin") {
+  if (state.currentPage === "admin" || state.currentPage === "showcase") {
     navigateTo("archive");
   }
   await checkAuthStatus();
+  loadStats();
+  if (state.currentPage === "collection") {
+    fetchCollectionDemos();
+    loadCollectionGames();
+  } else if (state.currentPage === "archive") {
+    fetchArchiveDemos(false);
+  }
+}
+
+/* ==========================================================================
+   PUBLIC COLLECTOR SHOWCASE
+   ========================================================================== */
+async function loadPublicShowcase(username) {
+  if (!elements.pagePublicProfile) return;
+
+  elements.showcaseTitle.textContent = `${username}'s Collection`;
+  elements.showcaseSubtitle.textContent = "Collector Showcase • PBPX Archive";
+  elements.showcasePrivateNotice.style.display = "none";
+  elements.showcaseBody.style.display = "none";
+  elements.showcaseContainer.innerHTML = "";
+  elements.showcaseResultsCount.textContent = "Loading discs...";
+
+  try {
+    const res = await apiFetch(`${API_BASE}/api/users/${encodeURIComponent(username)}/collection`);
+    if (res.status === 404) {
+      elements.showcasePrivateNotice.style.display = "block";
+      elements.showcasePrivateMsg.textContent = `Collector "${username}" was not found in PBPX archive.`;
+      return;
+    }
+    const data = await res.json();
+    if (data.is_private) {
+      elements.showcasePrivateNotice.style.display = "block";
+      elements.showcasePrivateMsg.textContent = data.message || "This collector has marked their collection profile as private.";
+      return;
+    }
+
+    elements.showcaseBody.style.display = "block";
+    const st = data.stats || {};
+    elements.showcaseOwnedCount.textContent = st.owned_count != null ? st.owned_count : (data.total_owned || 0);
+    elements.showcaseCompletionRate.textContent = st.completion_rate != null ? `${Number(st.completion_rate).toFixed(1)}%` : "0.0%";
+    elements.showcasePs1Count.textContent = (st.ps1_summary && st.ps1_summary.owned != null) ? st.ps1_summary.owned : 0;
+    elements.showcasePs2Count.textContent = (st.ps2_summary && st.ps2_summary.owned != null) ? st.ps2_summary.owned : 0;
+
+    const discs = data.discs || [];
+    elements.showcaseResultsCount.textContent = `${discs.length} discs`;
+    elements.showcaseGalleryTitle.textContent = `${username}'s Discs (${discs.length})`;
+
+    if (discs.length === 0) {
+      elements.showcaseContainer.innerHTML = `
+        <div class="empty-box" style="grid-column: 1 / -1; padding: 40px 20px;">
+          <p class="text-muted">This collector has not cataloged any discs yet.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    discs.forEach(disc => {
+      fragment.appendChild(createShowcaseCard(disc));
+    });
+    elements.showcaseContainer.appendChild(fragment);
+  } catch (err) {
+    console.error("Failed to load showcase:", err);
+    elements.showcasePrivateNotice.style.display = "block";
+    elements.showcasePrivateMsg.textContent = `Could not load showcase: ${err.message}`;
+  }
+}
+
+function createShowcaseCard(demo) {
+  const card = document.createElement("div");
+  card.className = "ps-card";
+  card.setAttribute("data-id", demo.id);
+
+  const thumbUrl = resolveAssetUrl(demo.primary_thumbnail);
+  const scedText = demo.sced_codes && demo.sced_codes.length > 0 ? demo.sced_codes.join(", ") : (demo.catalog_line || "");
+
+  let flagsHtml = "";
+  if (demo.variants && demo.variants.length > 0) {
+    const seen = new Set();
+    const flagImgs = [];
+    demo.variants.forEach(v => {
+      if (v.flag_icon && !seen.has(v.flag_icon)) {
+        seen.add(v.flag_icon);
+        flagImgs.push(`<img src="${escapeAttr(resolveAssetUrl(v.flag_icon))}" alt="${escapeAttr(v.country || '')}" class="flag-mini" title="${escapeAttr(v.country || '')}" onerror="this.style.display='none';" />`);
+      }
+    });
+    if (flagImgs.length > 0) {
+      flagsHtml = flagImgs.join("");
+    }
+  }
+
+  const countsHtml = [];
+  if (demo.playable_count > 0) countsHtml.push(`<span>${demo.playable_count} Playable</span>`);
+  if (demo.trailer_count > 0) countsHtml.push(`<span>${demo.trailer_count} Video</span>`);
+
+  const conditionHtml = demo.coll_condition && demo.coll_condition !== "good"
+    ? `<span class="tag-badge" style="background: var(--ps1-grey-panel); font-size: 10px;">${escapeHtml(demo.coll_condition.toUpperCase())}</span>`
+    : "";
+
+  card.innerHTML = `
+    <div class="card-img-wrap">
+      <img src="${escapeAttr(thumbUrl)}" alt="${escapeAttr(demo.title)}" class="card-img" loading="lazy" onerror="this.onerror=null;this.src='/assets/demopals/f-eur.jpg';" />
+      <div class="card-tag-strip">
+        <span class="tag-badge tag-${escapeAttr((demo.console || '').toLowerCase())}">${escapeHtml(demo.console)}</span>
+        <span class="tag-badge">${escapeHtml(demo.section_name)}</span>
+        ${conditionHtml}
+      </div>
+    </div>
+    <div class="card-info">
+      ${flagsHtml ? `<div class="card-flags">${flagsHtml}</div>` : ""}
+      <div class="card-title" title="${escapeAttr(demo.title)}">${escapeHtml(demo.title)}</div>
+      <div class="card-sced">${escapeHtml(scedText)}</div>
+      <div class="card-footer">
+        <div class="card-counts">
+          ${countsHtml.join("")}
+        </div>
+        <span class="tag-badge tag-owned" style="font-size: 11px; padding: 2px 8px;">In Collection</span>
+      </div>
+    </div>
+  `;
+
+  card.addEventListener("click", () => openDetailModal(demo.id));
+  return card;
 }
 
 function setupAdminListeners() {
-  // Login / Logout buttons
+  // Login / Register / Logout buttons
   if (elements.btnOpenLoginModal) {
     elements.btnOpenLoginModal.addEventListener("click", () => {
       if (state.auth && state.auth.setup_needed) openSetupModal();
       else openLoginModal();
+    });
+  }
+  if (elements.btnOpenRegisterModal) {
+    elements.btnOpenRegisterModal.addEventListener("click", () => {
+      openRegisterModal();
+    });
+  }
+  if (elements.tabAuthLogin) {
+    elements.tabAuthLogin.addEventListener("click", () => {
+      setAuthModalMode("login");
+    });
+  }
+  if (elements.tabAuthRegister) {
+    elements.tabAuthRegister.addEventListener("click", () => {
+      setAuthModalMode("register");
     });
   }
   if (elements.btnCloseLoginModal) {

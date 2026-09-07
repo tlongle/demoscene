@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, Tuple
 from fastapi import Request, HTTPException, Security, status, Depends
 
+from app.core.config import settings
 from app.core.database import get_db_connection
 
 
@@ -41,7 +42,13 @@ def count_users(db_path: str = None) -> int:
     return count
 
 
-def create_user(username: str, password: str, is_admin: bool = True, db_path: str = None) -> Dict[str, Any]:
+def create_user(
+    username: str,
+    password: str,
+    is_admin: Optional[bool] = None,
+    is_private: bool = False,
+    db_path: str = None
+) -> Dict[str, Any]:
     """Register a new user with hashed credentials."""
     username = username.strip()
     if not username or len(username) < 2:
@@ -49,15 +56,18 @@ def create_user(username: str, password: str, is_admin: bool = True, db_path: st
     if not password or len(password) < 4:
         raise ValueError("Password must be at least 4 characters long.")
 
+    if is_admin is None:
+        is_admin = (count_users(db_path) == 0)
+
     pw_hash, salt = hash_password(password)
 
     conn = get_db_connection(db_path)
     cur = conn.cursor()
     try:
         cur.execute("""
-        INSERT INTO users (username, password_hash, salt, is_admin, created_at)
-        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-        """, (username, pw_hash, salt, 1 if is_admin else 0))
+        INSERT INTO users (username, password_hash, salt, is_admin, is_private, created_at)
+        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        """, (username, pw_hash, salt, 1 if is_admin else 0, 1 if is_private else 0))
         user_id = cur.lastrowid
         conn.commit()
     except Exception as e:
@@ -68,7 +78,8 @@ def create_user(username: str, password: str, is_admin: bool = True, db_path: st
     return {
         "id": user_id,
         "username": username,
-        "is_admin": bool(is_admin)
+        "is_admin": bool(is_admin),
+        "is_private": bool(is_private)
     }
 
 
@@ -77,7 +88,7 @@ def authenticate_user(username: str, password: str, db_path: str = None) -> Opti
     username = username.strip()
     conn = get_db_connection(db_path)
     cur = conn.cursor()
-    cur.execute("SELECT id, username, password_hash, salt, is_admin FROM users WHERE username = ?", (username,))
+    cur.execute("SELECT id, username, password_hash, salt, is_admin, is_private FROM users WHERE username = ?", (username,))
     row = cur.fetchone()
     conn.close()
 
@@ -88,7 +99,8 @@ def authenticate_user(username: str, password: str, db_path: str = None) -> Opti
         return {
             "id": row["id"],
             "username": row["username"],
-            "is_admin": bool(row["is_admin"])
+            "is_admin": bool(row["is_admin"]),
+            "is_private": bool(row["is_private"])
         }
     return None
 
@@ -118,7 +130,7 @@ def get_user_by_session(token: str, db_path: str = None) -> Optional[Dict[str, A
     conn = get_db_connection(db_path)
     cur = conn.cursor()
     cur.execute("""
-    SELECT u.id, u.username, u.is_admin, s.expires_at
+    SELECT u.id, u.username, u.is_admin, u.is_private, s.expires_at
     FROM user_sessions s
     JOIN users u ON s.user_id = u.id
     WHERE s.token = ?
@@ -143,7 +155,8 @@ def get_user_by_session(token: str, db_path: str = None) -> Optional[Dict[str, A
     return {
         "id": row["id"],
         "username": row["username"],
-        "is_admin": bool(row["is_admin"])
+        "is_admin": bool(row["is_admin"]),
+        "is_private": bool(row["is_private"])
     }
 
 
@@ -167,6 +180,10 @@ def extract_session_token(request: Request) -> Optional[str]:
     token_header = request.headers.get("X-Session-Token")
     if token_header:
         return token_header.strip()
+
+    cookie_token = request.cookies.get(settings.SESSION_COOKIE_NAME)
+    if cookie_token:
+        return cookie_token.strip()
 
     return request.cookies.get("demoscene_session")
 

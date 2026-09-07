@@ -1,12 +1,14 @@
 """
-FastAPI Server for PlayStation Demo Collector (DEMOSCENE).
+FastAPI Server for PlayStation Demo & Promo Archive (PBPX).
 Supports Docker containerization, Nginx reverse proxy, Cloudflare Tunnels, and local asset caching.
 """
+from collections import defaultdict
 from contextlib import asynccontextmanager
 from typing import Optional, List, Dict, Any
 import base64
 import json
 import secrets
+import time
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, Depends, Security, Request, Response
 from fastapi.staticfiles import StaticFiles
@@ -37,9 +39,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="DEMOSCENE",
-    description="Track and archive PS1 & PS2 demo discs, disc scans, slipcases, and box art",
-    version="2.0.0",
+    title="PBPX",
+    description="PlayStation Demo & Promo Archive - Track, preserve, and showcase PS1 & PS2 demo discs, scans, and box art",
+    version="2.1.0",
     lifespan=lifespan
 )
 
@@ -56,9 +58,9 @@ async def verify_admin_key(
 ):
     """
     Verify administrator access via:
-    1. Active user session (Cookie / Bearer / X-Session-Token)
+    1. Active user session (Cookie / Bearer / X-Session-Token) with is_admin=True
     2. Admin API key header (legacy / CLI / test fallback)
-    3. Open local access if no users created and no ADMIN_API_KEY set
+    3. Open local access if not public, no users created, and no ADMIN_API_KEY set
     """
     if user and user.get("is_admin"):
         return user
@@ -66,20 +68,72 @@ async def verify_admin_key(
     configured_key = settings.ADMIN_API_KEY
     if configured_key:
         if api_key and secrets.compare_digest(api_key.strip(), configured_key):
-            return {"id": 0, "username": "admin_key", "is_admin": True}
+            return {"id": 1, "username": "admin_key", "is_admin": True}
         raise HTTPException(
             status_code=401,
             detail="Admin authentication required. Please log in."
         )
 
-    # If no users have been registered yet, allow setup/local access
-    if auth.count_users() == 0:
-        return {"id": 0, "username": "local_dev", "is_admin": True}
+    # If self-hosted and no users have been registered yet, allow setup/local access
+    if not settings.is_public and auth.count_users() == 0:
+        return {"id": 1, "username": "local_dev", "is_admin": True}
 
     raise HTTPException(
         status_code=401,
         detail="Admin authentication required. Please log in."
     )
+
+
+async def get_collection_user(
+    request: Request,
+    api_key: Optional[str] = Security(api_key_header),
+    user: Optional[Dict[str, Any]] = Depends(auth.get_current_user_optional)
+) -> Dict[str, Any]:
+    """
+    Identify active user for personal collection mutations:
+    1. Authenticated user session
+    2. Admin API key header (legacy fallback -> maps to user 1)
+    3. Open local development fallback (if selfhosted and 0 users)
+    """
+    if user:
+        return user
+
+    configured_key = settings.ADMIN_API_KEY
+    if configured_key and api_key and secrets.compare_digest(api_key.strip(), configured_key):
+        return {"id": 1, "username": "admin_key", "is_admin": True}
+
+    if not settings.is_public and auth.count_users() == 0 and not configured_key:
+        return {"id": 1, "username": "local_dev", "is_admin": True}
+
+    raise HTTPException(
+        status_code=401,
+        detail="Please log in to manage your collection."
+    )
+
+
+def resolve_read_user_id(user: Optional[Dict[str, Any]]) -> Optional[int]:
+    """Determine user_id for collection filtering in read endpoints."""
+    if user:
+        return user["id"]
+    if not settings.is_public and auth.count_users() <= 1:
+        return 1
+    return None
+
+
+def set_session_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=settings.SESSION_COOKIE_NAME,
+        value=token,
+        max_age=30 * 86400,
+        httponly=True,
+        samesite="lax",
+        secure=settings.is_public
+    )
+
+
+def clear_session_cookie(response: Response) -> None:
+    response.delete_cookie(settings.SESSION_COOKIE_NAME)
+    response.delete_cookie("demoscene_session")
 
 
 app.add_middleware(
@@ -89,6 +143,32 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
+
+# Lightweight in-memory rate limiting for auth endpoints (15 attempts / minute / IP)
+_auth_rate_limits: dict[str, list[float]] = defaultdict(list)
+
+
+def check_auth_rate_limit(request: Request, limit: int = 15, window_sec: int = 60) -> None:
+    client_ip = request.client.host if request.client else "unknown"
+    cf_ip = request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for")
+    ip = cf_ip.split(",")[0].strip() if cf_ip else client_ip
+    now = time.time()
+    attempts = [t for t in _auth_rate_limits[ip] if now - t < window_sec]
+    if len(attempts) >= limit:
+        raise HTTPException(status_code=429, detail="Too many attempts. Please wait a minute before trying again.")
+    attempts.append(now)
+    _auth_rate_limits[ip] = attempts
+
 
 
 class SettingsPayload(BaseModel):
@@ -132,6 +212,15 @@ class SetupPayload(BaseModel):
     password: str
 
 
+class RegisterPayload(BaseModel):
+    username: str
+    password: str
+
+
+class PrivacyPayload(BaseModel):
+    is_private: bool
+
+
 class ManualDemoPayload(BaseModel):
     title: str
     console: str = "PS2"
@@ -169,12 +258,15 @@ class ScanUploadPayload(BaseModel):
 
 @app.get("/api/auth/me")
 async def get_current_user_profile(user: Optional[Dict[str, Any]] = Depends(auth.get_current_user_optional)):
-    """Return active user profile and whether first-time setup is needed."""
+    """Return active user profile, instance mode, and setup status."""
     user_count = auth.count_users()
     return {
         "authenticated": user is not None,
         "user": user,
-        "setup_needed": user_count == 0
+        "setup_needed": (not settings.is_public and user_count == 0),
+        "mode": settings.MODE,
+        "is_public": settings.is_public,
+        "registration_allowed": settings.is_public or settings.ALLOW_REGISTRATION or (user_count == 0)
     }
 
 
@@ -186,32 +278,43 @@ async def setup_admin_account(payload: SetupPayload, response: Response):
     try:
         user = auth.create_user(payload.username, payload.password, is_admin=True)
         token = auth.create_session(user["id"])
-        response.set_cookie(
-            key="demoscene_session",
-            value=token,
-            max_age=30 * 86400,
-            httponly=True,
-            samesite="lax"
+        set_session_cookie(response, token)
+        return {"success": True, "token": token, "user": user}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/auth/register")
+async def register_account(request: Request, payload: RegisterPayload, response: Response):
+    """Register a new collector account."""
+    check_auth_rate_limit(request)
+    user_count = auth.count_users()
+    if not settings.is_public and user_count > 0 and not settings.ALLOW_REGISTRATION:
+        raise HTTPException(
+            status_code=403,
+            detail="Public registration is disabled on this self-hosted instance."
         )
+
+    # First user is admin; subsequent users are standard collectors
+    is_admin = (user_count == 0)
+    try:
+        user = auth.create_user(payload.username, payload.password, is_admin=is_admin)
+        token = auth.create_session(user["id"])
+        set_session_cookie(response, token)
         return {"success": True, "token": token, "user": user}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/api/auth/login")
-async def login_account(payload: LoginPayload, response: Response):
+async def login_account(request: Request, payload: LoginPayload, response: Response):
     """Authenticate username and password, returning session token and cookie."""
+    check_auth_rate_limit(request)
     user = auth.authenticate_user(payload.username, payload.password)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid username or password.")
     token = auth.create_session(user["id"])
-    response.set_cookie(
-        key="demoscene_session",
-        value=token,
-        max_age=30 * 86400,
-        httponly=True,
-        samesite="lax"
-    )
+    set_session_cookie(response, token)
     return {"success": True, "token": token, "user": user}
 
 
@@ -225,8 +328,45 @@ async def logout_account(
     token = auth.extract_session_token(request)
     if token:
         auth.destroy_session(token)
-    response.delete_cookie("demoscene_session")
+    clear_session_cookie(response)
     return {"success": True}
+
+
+@app.post("/api/auth/privacy")
+def update_privacy(payload: PrivacyPayload, user: Dict[str, Any] = Depends(auth.get_current_user)):
+    """Update privacy preference for user collection profile."""
+    db.update_user_privacy(user["id"], payload.is_private)
+    return {"success": True, "is_private": payload.is_private}
+
+
+@app.get("/api/users/{username}/collection")
+def get_user_public_collection(
+    username: str,
+    viewer: Optional[Dict[str, Any]] = Depends(auth.get_current_user_optional)
+):
+    """Public collector showcase profile."""
+    target_user = db.get_user_by_username(username)
+    if not target_user:
+        raise HTTPException(status_code=404, detail=f"Collector '{username}' not found.")
+
+    is_owner = viewer and (viewer["id"] == target_user["id"])
+    is_admin_viewer = viewer and viewer.get("is_admin")
+    if target_user.get("is_private") and not (is_owner or is_admin_viewer):
+        return {
+            "username": target_user["username"],
+            "is_private": True,
+            "message": "This collector has set their collection to private."
+        }
+
+    stats = db.get_stats(user_id=target_user["id"])
+    owned_demos = db.search_demos(collection_status="owned", user_id=target_user["id"], limit=300)
+    return {
+        "username": target_user["username"],
+        "is_private": False,
+        "stats": stats,
+        "total_owned": owned_demos["total"],
+        "discs": owned_demos["results"]
+    }
 
 
 @app.get("/api/settings")
@@ -259,9 +399,11 @@ def get_demos(
     country: str = Query("ALL", description="Country/region filter"),
     status: str = Query("ALL", description="Collection status: ALL, owned, wanted, unowned"),
     limit: int = Query(60, ge=1, le=200),
-    offset: int = Query(0, ge=0)
+    offset: int = Query(0, ge=0),
+    user: Optional[Dict[str, Any]] = Depends(auth.get_current_user_optional)
 ):
     """Search and filter demo discs with pagination."""
+    user_id = resolve_read_user_id(user)
     return db.search_demos(
         query=q,
         console=console,
@@ -269,14 +411,19 @@ def get_demos(
         country=country,
         collection_status=status,
         limit=limit,
-        offset=offset
+        offset=offset,
+        user_id=user_id
     )
 
 
 @app.get("/api/demos/{demo_id}")
-def get_demo_detail(demo_id: str):
+def get_demo_detail(
+    demo_id: str,
+    user: Optional[Dict[str, Any]] = Depends(auth.get_current_user_optional)
+):
     """Retrieve full details of a specific demo disc, including games, scans, and intel."""
-    demo = db.get_demo(demo_id)
+    user_id = resolve_read_user_id(user)
+    demo = db.get_demo(demo_id, user_id=user_id)
     if not demo:
         raise HTTPException(status_code=404, detail="Demo disc not found")
     
@@ -289,8 +436,11 @@ def get_demo_detail(demo_id: str):
     return demo
 
 
-@app.post("/api/collection/bulk", dependencies=[Depends(verify_admin_key)])
-def bulk_update_collection_status(payload: BulkCollectionUpdate):
+@app.post("/api/collection/bulk")
+def bulk_update_collection_status(
+    payload: BulkCollectionUpdate,
+    user: Dict[str, Any] = Depends(get_collection_user)
+):
     """Bulk update collection status, condition, and checklist attributes for multiple demos."""
     if not payload.demo_ids:
         raise HTTPException(status_code=400, detail="demo_ids list cannot be empty")
@@ -312,15 +462,20 @@ def bulk_update_collection_status(payload: BulkCollectionUpdate):
     updated_count = db.bulk_update_collection(
         demo_ids=payload.demo_ids,
         updates=updates,
-        variant_id=payload.variant_id
+        variant_id=payload.variant_id,
+        user_id=user["id"]
     )
     return {"success": True, "updated_count": updated_count}
 
 
-@app.post("/api/collection/{demo_id}", dependencies=[Depends(verify_admin_key)])
-def update_collection_status(demo_id: str, payload: CollectionUpdate):
+@app.post("/api/collection/{demo_id}")
+def update_collection_status(
+    demo_id: str,
+    payload: CollectionUpdate,
+    user: Dict[str, Any] = Depends(get_collection_user)
+):
     """Update collection tracking state for a demo disc/variant."""
-    demo = db.get_demo(demo_id)
+    demo = db.get_demo(demo_id, user_id=user["id"])
     if not demo:
         raise HTTPException(status_code=404, detail="Demo disc not found")
 
@@ -332,21 +487,24 @@ def update_collection_status(demo_id: str, payload: CollectionUpdate):
         has_sleeve=payload.has_sleeve if payload.has_sleeve is not None else 1,
         has_case=payload.has_case if payload.has_case is not None else 1,
         is_working=payload.is_working if payload.is_working is not None else 1,
-        notes=payload.notes or ""
+        notes=payload.notes or "",
+        user_id=user["id"]
     )
     return {"success": True, "record": result}
 
 
 @app.get("/api/stats")
-def get_collection_stats():
+def get_collection_stats(user: Optional[Dict[str, Any]] = Depends(auth.get_current_user_optional)):
     """Retrieve collection statistics, counts, and completion rate."""
-    return db.get_stats()
+    user_id = resolve_read_user_id(user)
+    return db.get_stats(user_id=user_id)
 
 
 @app.get("/api/collection/games")
-def get_collection_games():
+def get_collection_games(user: Optional[Dict[str, Any]] = Depends(auth.get_current_user_optional)):
     """Retrieve all unique games contained within owned demo discs."""
-    return db.get_collection_games()
+    user_id = resolve_read_user_id(user)
+    return db.get_collection_games(user_id=user_id)
 
 
 @app.get("/api/filters")
@@ -379,16 +537,16 @@ def get_filter_options():
     }
 
 
-@app.get("/api/export", dependencies=[Depends(verify_admin_key)])
-def export_backup():
+@app.get("/api/export")
+def export_backup(user: Dict[str, Any] = Depends(get_collection_user)):
     """Export complete collection data for JSON backup."""
-    return db.export_collection_data()
+    return db.export_collection_data(user_id=user["id"])
 
 
-@app.post("/api/import", dependencies=[Depends(verify_admin_key)])
-def import_backup(payload: ImportPayload):
+@app.post("/api/import")
+def import_backup(payload: ImportPayload, user: Dict[str, Any] = Depends(get_collection_user)):
     """Import and merge JSON backup collection records."""
-    count = db.import_collection_data(payload.dict())
+    count = db.import_collection_data(payload.dict(), user_id=user["id"])
     return {"success": True, "imported_count": count}
 
 

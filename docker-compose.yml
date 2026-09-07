@@ -1,14 +1,18 @@
 version: '3.8'
 
 services:
-  demoscene:
+  pbpx:
     build: .
-    container_name: demoscene
+    container_name: pbpx
     restart: unless-stopped
     ports:
       - "5363:5363"
     environment:
       - PORT=5363
+      - PBPX_MODE=${PBPX_MODE:-selfhosted}
+      - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-false}
+      - BASE_URL=${BASE_URL:-http://localhost:5363}
+      - PBPX_DB_PATH=/app/data/pbpx.db
       - DEMOPALS_DB_PATH=/app/data/demopals.db
       - ASSETS_DIR=/app/data/assets
       # Official IGDB / Twitch API Credentials for Box Art

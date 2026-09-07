@@ -1,9 +1,11 @@
-# Lightweight Python Dockerfile for DEMOSCENE
+# Lightweight Python Dockerfile for PBPX
 FROM python:3.12-slim
 
 # Prevent python from writing pyc files & buffering stdout
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PBPX_MODE=selfhosted
+ENV PBPX_DB_PATH=/app/data/pbpx.db
 ENV DEMOPALS_DB_PATH=/app/data/demopals.db
 ENV ASSETS_DIR=/app/data/assets
 ENV PORT=5363
