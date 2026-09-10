@@ -6,7 +6,7 @@ services:
     container_name: pbpx
     restart: unless-stopped
     ports:
-      - "5363:5363"
+      - "127.0.0.1:5363:5363"
     environment:
       - PORT=5363
       - PBPX_MODE=${PBPX_MODE:-selfhosted}
@@ -25,7 +25,7 @@ services:
       # Persistent storage for SQLite database and downloaded images
       - ./data:/app/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5363/api/stats"]
+      test: ["CMD", "curl", "-f", "http://localhost:5363/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3

@@ -2800,6 +2800,10 @@ async function handleLoginSubmit() {
   }
 
   const isSetup = state.auth && state.auth.setup_needed;
+  if ((isSetup || state.authMode === "register") && password.trim().length < 8) {
+    showFormFeedback(elements.loginFeedback, "Password must be at least 8 characters long.", "error");
+    return;
+  }
   let endpoint = "/api/auth/login";
   if (isSetup) {
     endpoint = "/api/auth/setup";

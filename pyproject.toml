@@ -1,6 +1,6 @@
 [project]
 name = "pbpx"
-version = "2.0.0"
+version = "2.1.0"
 description = "Universal PlayStation Demo & Promo Archive - Discs, Scans & Box Art"
 readme = "README.md"
 requires-python = ">=3.10"

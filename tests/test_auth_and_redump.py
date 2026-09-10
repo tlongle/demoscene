@@ -420,3 +420,68 @@ def test_collector_profile_customization_and_metadata():
     assert showcase["favorite_console"] == "PS1"
     assert showcase["is_admin"] is False
     assert showcase["created_at"] is not None
+
+
+def test_production_hardening_security_and_health(monkeypatch):
+    """Verify Phase 1 hardening: /api/health probe, 8-char password enforcement, session purge, proxy trust."""
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "MODE", "public")
+
+    # 1. Verify /api/health endpoint
+    r_health = client.get("/api/health")
+    assert r_health.status_code == 200
+    health_data = r_health.json()
+    assert health_data["status"] == "healthy"
+    assert health_data["app"] == "pbpx"
+    assert health_data["version"] == "2.1.0"
+    assert health_data["database"] == "connected"
+    assert health_data["total_demos"] > 0
+
+    # 2. Verify password policy rejects short and whitespace-only passwords
+    r_short = client.post("/api/auth/register", json={
+        "username": "short_pw_user",
+        "password": "1234"
+    })
+    assert r_short.status_code == 400
+    assert "at least 8 characters" in r_short.json()["detail"]
+
+    r_spaces = client.post("/api/auth/register", json={
+        "username": "space_pw_user",
+        "password": "        "
+    })
+    assert r_spaces.status_code == 400
+    assert "at least 8 characters" in r_spaces.json()["detail"]
+
+    # 3. Verify session cleanup purges expired tokens
+    from app.core import auth as auth_mod
+    import app.core.database as db_mod
+    conn = db_mod.get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO user_sessions (token, user_id, created_at, expires_at)
+        VALUES ('expired_test_token_123', 1, datetime('now', '-2 days'), datetime('now', '-1 days'))
+    """)
+    conn.commit()
+    conn.close()
+
+    purged = auth_mod.cleanup_expired_sessions()
+    assert purged >= 1
+
+    # Ensure expired token is gone
+    conn = db_mod.get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT count(*) FROM user_sessions WHERE token = 'expired_test_token_123'")
+    assert cur.fetchone()[0] == 0
+    conn.close()
+
+    # 4. Verify rate limiter trusted proxy logic
+    from app.main import is_trusted_proxy
+    assert is_trusted_proxy("127.0.0.1") is True
+    assert is_trusted_proxy("::1") is True
+    assert is_trusted_proxy("localhost") is True
+    assert is_trusted_proxy("testclient") is True
+    assert is_trusted_proxy("172.18.0.1") is True
+    assert is_trusted_proxy("10.0.0.15") is True
+    assert is_trusted_proxy("203.0.113.195") is False
+    assert is_trusted_proxy("198.51.100.22") is False
+

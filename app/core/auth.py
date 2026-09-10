@@ -53,8 +53,8 @@ def create_user(
     username = username.strip()
     if not username or len(username) < 2:
         raise ValueError("Username must be at least 2 characters long.")
-    if not password or len(password) < 4:
-        raise ValueError("Password must be at least 4 characters long.")
+    if not password or len(password.strip()) < 8:
+        raise ValueError("Password must be at least 8 characters long and cannot be only whitespace.")
 
     if is_admin is None:
         is_admin = (count_users(db_path) == 0)
@@ -175,6 +175,17 @@ def destroy_session(token: str, db_path: str = None) -> None:
     cur.execute("DELETE FROM user_sessions WHERE token = ?", (token.strip(),))
     conn.commit()
     conn.close()
+
+
+def cleanup_expired_sessions(db_path: str = None) -> int:
+    """Purge all expired sessions from user_sessions table. Returns count deleted."""
+    conn = get_db_connection(db_path)
+    cur = conn.cursor()
+    cur.execute("DELETE FROM user_sessions WHERE expires_at < CURRENT_TIMESTAMP")
+    count = cur.rowcount
+    conn.commit()
+    conn.close()
+    return count
 
 
 def extract_session_token(request: Request) -> Optional[str]:

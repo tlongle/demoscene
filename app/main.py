@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from typing import Optional, List, Dict, Any
 import base64
 import json
+import os
 import secrets
 import time
 
@@ -46,6 +47,14 @@ async def lifespan(app: FastAPI):
                 print(f"[PBPX] Auto-seeded {count} verified demo discs.")
     except Exception as e:
         print(f"[PBPX Warning] Catalog seeding check encountered: {e}")
+
+    # Clean up stale sessions on startup
+    try:
+        purged = auth.cleanup_expired_sessions()
+        if purged > 0:
+            print(f"[PBPX] Purged {purged} expired session(s).")
+    except Exception as e:
+        print(f"[PBPX Warning] Session cleanup check encountered: {e}")
 
     # In public web mode, ensure built-in artwork pack is pulled in background if missing
     if settings.is_public and asset_pack.count_local_assets() < 100:
@@ -174,11 +183,29 @@ async def add_security_headers(request: Request, call_next):
 # Lightweight in-memory rate limiting for auth endpoints (15 attempts / minute / IP)
 _auth_rate_limits: dict[str, list[float]] = defaultdict(list)
 
+# Trusted reverse-proxy peer networks (loopback, Docker bridge, private subnets)
+TRUSTED_PROXY_IPS = {"127.0.0.1", "::1", "localhost", "testclient"}
+
+
+def is_trusted_proxy(client_host: str) -> bool:
+    if not client_host:
+        return False
+    if client_host in TRUSTED_PROXY_IPS:
+        return True
+    if client_host.startswith(("172.", "10.", "192.168.")):
+        return True
+    return False
+
 
 def check_auth_rate_limit(request: Request, limit: int = 15, window_sec: int = 60) -> None:
-    client_ip = request.client.host if request.client else "unknown"
-    cf_ip = request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for")
-    ip = cf_ip.split(",")[0].strip() if cf_ip else client_ip
+    peer_ip = request.client.host if request.client else "unknown"
+    # Only trust proxy forwarding headers if the direct TCP peer is a trusted local/reverse-proxy socket
+    if is_trusted_proxy(peer_ip):
+        cf_ip = request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for")
+        ip = cf_ip.split(",")[0].strip() if cf_ip else peer_ip
+    else:
+        ip = peer_ip
+
     now = time.time()
     attempts = [t for t in _auth_rate_limits[ip] if now - t < window_sec]
     if len(attempts) >= limit:
@@ -536,6 +563,30 @@ def update_collection_status(
         user_id=user["id"]
     )
     return {"success": True, "record": result}
+
+
+@app.get("/api/health")
+def health_check():
+    """Lightweight health probe for Docker, Cloudflare, and uptime monitoring."""
+    try:
+        conn = db.get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM demos")
+        total_demos = cur.fetchone()[0]
+        conn.close()
+        db_status = "connected"
+    except Exception as e:
+        db_status = f"error: {e}"
+        total_demos = 0
+
+    return {
+        "status": "healthy" if db_status == "connected" else "degraded",
+        "app": "pbpx",
+        "version": "2.1.0",
+        "mode": settings.MODE,
+        "database": db_status,
+        "total_demos": total_demos
+    }
 
 
 @app.get("/api/stats")

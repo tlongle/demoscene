@@ -24,3 +24,13 @@ def setup_test_database(tmp_path_factory):
 
     # Restore original setting
     settings.DB_PATH = orig_db_path
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limits():
+    """Clear in-memory auth rate limits between tests so test suites do not exhaust IP quotas."""
+    from app.main import _auth_rate_limits
+    _auth_rate_limits.clear()
+    yield
+    _auth_rate_limits.clear()
+
