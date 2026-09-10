@@ -92,6 +92,114 @@ async function apiFetch(url, options = {}) {
   return res;
 }
 
+// Retro PlayStation Avatar Presets
+const AVATAR_PRESETS = [
+  { id: "memory_card", name: "Memory Card", desc: "15-Block PS1 Card" },
+  { id: "controller", name: "DualShock", desc: "Classic Gamepad" },
+  { id: "disc", name: "Black Disc", desc: "Obsidian CD-ROM" },
+  { id: "ps1_console", name: "PS1 Classic", desc: "Original Grey Unit" },
+  { id: "ps2_console", name: "PS2 Monolith", desc: "Vertical Tower" },
+  { id: "net_yaroze", name: "Net Yaroze", desc: "Matte Black Dev Unit" },
+  { id: "pocketstation", name: "PocketStation", desc: "PDA with LCD" }
+];
+
+const AVATAR_SVGS = {
+  memory_card: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="12" y="8" width="40" height="48" rx="4" fill="#383c48" stroke="#00f0ff" stroke-width="2"/>
+    <rect x="18" y="14" width="28" height="14" rx="2" fill="#20232c" stroke="#565f76" stroke-width="1.5"/>
+    <line x1="22" y1="20" x2="42" y2="20" stroke="#00f0ff" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="22" y1="24" x2="36" y2="24" stroke="#565f76" stroke-width="1.5" stroke-linecap="round"/>
+    <rect x="20" y="34" width="24" height="16" rx="2" fill="#181a20" stroke="#565f76" stroke-width="1.5"/>
+    <circle cx="26" cy="42" r="2" fill="#ff4b4b"/>
+    <circle cx="32" cy="42" r="2" fill="#00e676"/>
+    <circle cx="38" cy="42" r="2" fill="#ffb300"/>
+    <rect x="24" y="56" width="16" height="4" fill="#565f76"/>
+  </svg>`,
+
+  controller: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M14 26 C12 18, 22 14, 32 14 C42 14, 52 18, 50 26 C49 32, 54 46, 48 52 C42 58, 38 48, 36 40 C34 38, 30 38, 28 40 C26 48, 22 58, 16 52 C10 46, 15 32, 14 26 Z" fill="#2b2f3a" stroke="#00f0ff" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M20 25 H24 V21 H26 V25 H30 V27 H26 V31 H24 V27 H20 Z" fill="#181a20" stroke="#565f76" stroke-width="1"/>
+    <circle cx="44" cy="21" r="2" fill="#00e676"/>
+    <circle cx="48" cy="26" r="2" fill="#ff4b4b"/>
+    <circle cx="44" cy="31" r="2" fill="#4d94ff"/>
+    <circle cx="40" cy="26" r="2" fill="#ff70a6"/>
+    <circle cx="26" cy="38" r="4.5" fill="#181a20" stroke="#00f0ff" stroke-width="1.5"/>
+    <circle cx="38" cy="38" r="4.5" fill="#181a20" stroke="#00f0ff" stroke-width="1.5"/>
+  </svg>`,
+
+  disc: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="32" cy="32" r="26" fill="#121318" stroke="#00f0ff" stroke-width="2"/>
+    <circle cx="32" cy="32" r="18" stroke="#2c3140" stroke-width="1.5" stroke-dasharray="3 3"/>
+    <circle cx="32" cy="32" r="10" fill="#20232c" stroke="#565f76" stroke-width="2"/>
+    <circle cx="32" cy="32" r="4" fill="#0b0c10" stroke="#00f0ff" stroke-width="1.5"/>
+    <path d="M16 24 C20 18, 28 14, 36 14" stroke="#ff70a6" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+    <path d="M48 40 C44 46, 36 50, 28 50" stroke="#00f0ff" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+  </svg>`,
+
+  ps1_console: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="8" y="16" width="48" height="34" rx="4" fill="#8c929d" stroke="#dcdfe4" stroke-width="2"/>
+    <circle cx="32" cy="33" r="13" fill="#9ea4af" stroke="#717782" stroke-width="1.5"/>
+    <circle cx="32" cy="33" r="10" fill="#848a95"/>
+    <circle cx="15" cy="24" r="3" fill="#20232c" stroke="#4d94ff" stroke-width="1"/>
+    <circle cx="15" cy="42" r="3" fill="#20232c" stroke="#717782" stroke-width="1"/>
+    <circle cx="49" cy="42" r="3.5" fill="#717782" stroke="#565f76" stroke-width="1"/>
+    <rect x="18" y="47" width="28" height="3" rx="1" fill="#4b505c"/>
+  </svg>`,
+
+  ps2_console: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="18" y="8" width="28" height="48" rx="2" fill="#16181f" stroke="#00f0ff" stroke-width="2"/>
+    <line x1="18" y1="16" x2="46" y2="16" stroke="#252936" stroke-width="1.5"/>
+    <line x1="18" y1="24" x2="46" y2="24" stroke="#252936" stroke-width="1.5"/>
+    <line x1="18" y1="32" x2="46" y2="32" stroke="#252936" stroke-width="1.5"/>
+    <line x1="18" y1="40" x2="46" y2="40" stroke="#252936" stroke-width="1.5"/>
+    <line x1="18" y1="48" x2="46" y2="48" stroke="#252936" stroke-width="1.5"/>
+    <rect x="36" y="11" width="6" height="3" fill="#0051ff"/>
+    <rect x="22" y="18" width="20" height="4" fill="#0d0e12" stroke="#3e4454" stroke-width="0.75"/>
+    <rect x="14" y="54" width="36" height="3" rx="1" fill="#252936"/>
+  </svg>`,
+
+  net_yaroze: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="8" y="16" width="48" height="34" rx="4" fill="#1c1d22" stroke="#ffaa00" stroke-width="2"/>
+    <circle cx="32" cy="33" r="13" fill="#282a32" stroke="#444856" stroke-width="1.5"/>
+    <circle cx="32" cy="33" r="10" fill="#18191e"/>
+    <circle cx="15" cy="24" r="3" fill="#ffaa00"/>
+    <circle cx="15" cy="42" r="3" fill="#444856"/>
+    <circle cx="49" cy="42" r="3.5" fill="#444856"/>
+    <rect x="18" y="47" width="28" height="3" rx="1" fill="#0f1013"/>
+  </svg>`,
+
+  pocketstation: `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="16" y="8" width="32" height="48" rx="8" fill="#e8eaee" stroke="#00f0ff" stroke-width="2"/>
+    <rect x="22" y="14" width="20" height="16" rx="2" fill="#7a8d79" stroke="#505e4f" stroke-width="1.5"/>
+    <rect x="25" y="18" width="4" height="4" fill="#243023"/>
+    <rect x="33" y="22" width="6" height="4" fill="#243023"/>
+    <circle cx="32" cy="36" r="2.5" fill="#4b505c"/>
+    <circle cx="32" cy="44" r="2.5" fill="#4b505c"/>
+    <circle cx="26" cy="40" r="2.5" fill="#4b505c"/>
+    <circle cx="38" cy="40" r="2.5" fill="#4b505c"/>
+    <circle cx="28" cy="50" r="1" fill="#8c929d"/>
+    <circle cx="32" cy="50" r="1" fill="#8c929d"/>
+    <circle cx="36" cy="50" r="1" fill="#8c929d"/>
+  </svg>`
+};
+
+function getAvatarSvg(avatarKey) {
+  return AVATAR_SVGS[avatarKey] || AVATAR_SVGS.memory_card;
+}
+
+function formatJoinedDate(isoString) {
+  if (!isoString) return "Archive Member";
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return "Archive Member";
+    const month = d.toLocaleString("default", { month: "short" });
+    const year = d.getFullYear();
+    return `Member since ${month} ${year}`;
+  } catch {
+    return "Archive Member";
+  }
+}
+
 // Application State
 const state = {
   currentPage: "archive", // 'archive', 'collection', 'admin', 'settings', 'showcase'
@@ -103,6 +211,13 @@ const state = {
     mode: "selfhosted",
     is_public: false,
     registration_allowed: false
+  },
+  showcase: {
+    username: "",
+    discs: [],
+    console: "ALL",
+    query: "",
+    selectedAvatar: "memory_card"
   },
 
   archive: {
@@ -174,18 +289,35 @@ const elements = {
   // Showcase Elements
   showcaseTitle: document.getElementById("showcaseTitle"),
   showcaseSubtitle: document.getElementById("showcaseSubtitle"),
+  showcaseAvatarIcon: document.getElementById("showcaseAvatarIcon"),
+  showcaseRoleBadge: document.getElementById("showcaseRoleBadge"),
+  showcaseJoined: document.getElementById("showcaseJoined"),
+  showcaseBio: document.getElementById("showcaseBio"),
+  showcaseFavConsolePill: document.getElementById("showcaseFavConsolePill"),
+  showcaseDiscsCountPill: document.getElementById("showcaseDiscsCountPill"),
   btnShowcaseShare: document.getElementById("btnShowcaseShare"),
+  btnShowcaseEditProfile: document.getElementById("btnShowcaseEditProfile"),
   btnShowcaseBack: document.getElementById("btnShowcaseBack"),
   showcasePrivateNotice: document.getElementById("showcasePrivateNotice"),
   showcasePrivateMsg: document.getElementById("showcasePrivateMsg"),
   btnShowcaseBrowseArchive: document.getElementById("btnShowcaseBrowseArchive"),
   showcaseBody: document.getElementById("showcaseBody"),
   showcaseOwnedCount: document.getElementById("showcaseOwnedCount"),
+  showcaseOwnedSub: document.getElementById("showcaseOwnedSub"),
   showcaseCompletionRate: document.getElementById("showcaseCompletionRate"),
+  showcaseCompletionFill: document.getElementById("showcaseCompletionFill"),
   showcasePs1Count: document.getElementById("showcasePs1Count"),
+  showcasePs1Sub: document.getElementById("showcasePs1Sub"),
   showcasePs2Count: document.getElementById("showcasePs2Count"),
+  showcasePs2Sub: document.getElementById("showcasePs2Sub"),
+  showcaseSleeveCount: document.getElementById("showcaseSleeveCount"),
+  showcaseCaseCount: document.getElementById("showcaseCaseCount"),
+  showcaseWorkingCount: document.getElementById("showcaseWorkingCount"),
+  showcaseMintCount: document.getElementById("showcaseMintCount"),
   showcaseGalleryTitle: document.getElementById("showcaseGalleryTitle"),
   showcaseResultsCount: document.getElementById("showcaseResultsCount"),
+  showcaseConsolePills: document.getElementById("showcaseConsolePills"),
+  showcaseSearchInput: document.getElementById("showcaseSearchInput"),
   showcaseContainer: document.getElementById("showcaseContainer"),
 
   // Collection Guest Prompt
@@ -197,6 +329,13 @@ const elements = {
   lblProfilePrivacyBadge: document.getElementById("lblProfilePrivacyBadge"),
   txtShowcaseUrl: document.getElementById("txtShowcaseUrl"),
   btnCopyShowcaseUrl: document.getElementById("btnCopyShowcaseUrl"),
+  btnViewMyShowcase: document.getElementById("btnViewMyShowcase"),
+  avatarPickerGrid: document.getElementById("avatarPickerGrid"),
+  txtProfileBio: document.getElementById("txtProfileBio"),
+  txtProfileBioCount: document.getElementById("txtProfileBioCount"),
+  selectProfileConsole: document.getElementById("selectProfileConsole"),
+  btnSaveProfile: document.getElementById("btnSaveProfile"),
+  profileSaveFeedback: document.getElementById("profileSaveFeedback"),
   chkMakeCollectionPrivate: document.getElementById("chkMakeCollectionPrivate"),
   profilePrivacyFeedback: document.getElementById("profilePrivacyFeedback"),
 
@@ -482,6 +621,31 @@ function setupNavigation() {
     elements.btnShowcaseBrowseArchive.addEventListener("click", () => {
       history.pushState(null, "", window.location.pathname + window.location.search);
       navigateTo("archive");
+    });
+  }
+
+  if (elements.btnShowcaseEditProfile) {
+    elements.btnShowcaseEditProfile.addEventListener("click", () => {
+      navigateTo("settings");
+    });
+  }
+
+  if (elements.showcaseConsolePills) {
+    elements.showcaseConsolePills.addEventListener("click", (e) => {
+      const btn = e.target.closest(".btn-toggle");
+      if (!btn) return;
+      const val = btn.dataset.console || "ALL";
+      state.showcase.console = val;
+      elements.showcaseConsolePills.querySelectorAll(".btn-toggle").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      filterAndRenderShowcaseDiscs();
+    });
+  }
+
+  if (elements.showcaseSearchInput) {
+    elements.showcaseSearchInput.addEventListener("input", (e) => {
+      state.showcase.query = e.target.value;
+      filterAndRenderShowcaseDiscs();
     });
   }
 
@@ -1739,6 +1903,131 @@ function setupSettingsListeners() {
   if (elements.btnCopyShowcaseUrl) {
     elements.btnCopyShowcaseUrl.addEventListener("click", handleCopyShowcaseUrl);
   }
+  if (elements.btnViewMyShowcase) {
+    elements.btnViewMyShowcase.addEventListener("click", () => {
+      if (state.auth && state.auth.user) {
+        window.location.hash = `#u/${encodeURIComponent(state.auth.user.username)}`;
+        navigateTo("showcase", state.auth.user.username);
+      }
+    });
+  }
+  if (elements.btnSaveProfile) {
+    elements.btnSaveProfile.addEventListener("click", handleSaveProfile);
+  }
+  if (elements.txtProfileBio && elements.txtProfileBioCount) {
+    elements.txtProfileBio.addEventListener("input", () => {
+      elements.txtProfileBioCount.textContent = `${elements.txtProfileBio.value.length} / 280`;
+    });
+  }
+}
+
+function renderAvatarPicker() {
+  if (!elements.avatarPickerGrid) return;
+  elements.avatarPickerGrid.innerHTML = "";
+
+  const currentAvatar = (state.auth && state.auth.user && state.auth.user.avatar) || state.showcase.selectedAvatar || "memory_card";
+  state.showcase.selectedAvatar = currentAvatar;
+
+  AVATAR_PRESETS.forEach(preset => {
+    const tile = document.createElement("div");
+    tile.className = `avatar-tile ${preset.id === currentAvatar ? "selected" : ""}`;
+    tile.setAttribute("data-avatar", preset.id);
+    tile.title = preset.desc;
+
+    tile.innerHTML = `
+      <div class="avatar-tile-svg">${AVATAR_SVGS[preset.id] || ""}</div>
+      <div class="avatar-tile-label">${preset.name}</div>
+    `;
+
+    tile.addEventListener("click", () => {
+      state.showcase.selectedAvatar = preset.id;
+      const allTiles = elements.avatarPickerGrid.querySelectorAll(".avatar-tile");
+      allTiles.forEach(t => t.classList.remove("selected"));
+      tile.classList.add("selected");
+    });
+
+    elements.avatarPickerGrid.appendChild(tile);
+  });
+}
+
+function populateProfileSettings(user) {
+  if (!elements.cardProfileSettings || !user) return;
+  elements.cardProfileSettings.style.display = "block";
+  if (elements.txtShowcaseUrl) {
+    elements.txtShowcaseUrl.value = `${window.location.origin}/#u/${encodeURIComponent(user.username)}`;
+  }
+  if (elements.chkMakeCollectionPrivate) {
+    elements.chkMakeCollectionPrivate.checked = Boolean(user.is_private);
+  }
+  if (elements.lblProfilePrivacyBadge) {
+    elements.lblProfilePrivacyBadge.textContent = user.is_private ? "Private" : "Public";
+    elements.lblProfilePrivacyBadge.style.background = user.is_private ? "var(--accent-red)" : "var(--ps1-grey-panel)";
+  }
+  if (elements.txtProfileBio) {
+    elements.txtProfileBio.value = user.bio || "";
+    if (elements.txtProfileBioCount) {
+      elements.txtProfileBioCount.textContent = `${(user.bio || "").length} / 280`;
+    }
+  }
+  if (elements.selectProfileConsole) {
+    elements.selectProfileConsole.value = user.favorite_console || "ALL";
+  }
+  state.showcase.selectedAvatar = user.avatar || "memory_card";
+  renderAvatarPicker();
+}
+
+async function handleSaveProfile() {
+  if (!state.auth || !state.auth.user) {
+    showToast("Please log in to update your profile.", "warning");
+    return;
+  }
+
+  const bio = elements.txtProfileBio ? elements.txtProfileBio.value.trim() : "";
+  const avatar = state.showcase.selectedAvatar || "memory_card";
+  const favoriteConsole = elements.selectProfileConsole ? elements.selectProfileConsole.value : "ALL";
+
+  if (elements.btnSaveProfile) {
+    elements.btnSaveProfile.disabled = true;
+    elements.btnSaveProfile.textContent = "Saving...";
+  }
+
+  try {
+    const res = await apiFetch(`${API_BASE}/api/auth/profile`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bio: bio,
+        avatar: avatar,
+        favorite_console: favoriteConsole
+      })
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      state.auth.user.bio = data.user.bio;
+      state.auth.user.avatar = data.user.avatar;
+      state.auth.user.favorite_console = data.user.favorite_console;
+      showToast("Profile changes saved successfully!", "success");
+      if (elements.profileSaveFeedback) {
+        showFormFeedback(elements.profileSaveFeedback, "Profile updated successfully.", "success");
+      }
+    } else {
+      showToast(data.detail || "Could not save profile.", "error");
+      if (elements.profileSaveFeedback) {
+        showFormFeedback(elements.profileSaveFeedback, data.detail || "Error saving profile.", "error");
+      }
+    }
+  } catch (err) {
+    showToast(`Failed to save profile: ${err.message}`, "error");
+    if (elements.profileSaveFeedback) {
+      showFormFeedback(elements.profileSaveFeedback, err.message, "error");
+    }
+  } finally {
+    if (elements.btnSaveProfile) {
+      elements.btnSaveProfile.disabled = false;
+      elements.btnSaveProfile.textContent = "💾 Save Profile Changes";
+    }
+  }
 }
 
 async function checkSettingsStatus() {
@@ -1780,17 +2069,7 @@ async function checkSettingsStatus() {
 
   // Update profile showcase settings card
   if (state.auth && state.auth.user) {
-    if (elements.cardProfileSettings) elements.cardProfileSettings.style.display = "block";
-    if (elements.txtShowcaseUrl) {
-      elements.txtShowcaseUrl.value = `${window.location.origin}/#u/${encodeURIComponent(state.auth.user.username)}`;
-    }
-    if (elements.chkMakeCollectionPrivate) {
-      elements.chkMakeCollectionPrivate.checked = Boolean(state.auth.user.is_private);
-    }
-    if (elements.lblProfilePrivacyBadge) {
-      elements.lblProfilePrivacyBadge.textContent = state.auth.user.is_private ? "Private" : "Public";
-      elements.lblProfilePrivacyBadge.style.background = state.auth.user.is_private ? "var(--accent-red)" : "var(--ps1-grey-panel)";
-    }
+    populateProfileSettings(state.auth.user);
   } else {
     if (elements.cardProfileSettings) elements.cardProfileSettings.style.display = "none";
   }
@@ -2438,17 +2717,7 @@ async function checkAuthStatus() {
       if (elements.colGuestPrompt) elements.colGuestPrompt.style.display = "none";
 
       if (elements.cardProfileSettings) {
-        elements.cardProfileSettings.style.display = "block";
-        if (elements.txtShowcaseUrl) {
-          elements.txtShowcaseUrl.value = `${window.location.origin}/#u/${encodeURIComponent(data.user.username)}`;
-        }
-        if (elements.chkMakeCollectionPrivate) {
-          elements.chkMakeCollectionPrivate.checked = Boolean(data.user.is_private);
-        }
-        if (elements.lblProfilePrivacyBadge) {
-          elements.lblProfilePrivacyBadge.textContent = data.user.is_private ? "Private" : "Public";
-          elements.lblProfilePrivacyBadge.style.background = data.user.is_private ? "var(--accent-red)" : "var(--ps1-grey-panel)";
-        }
+        populateProfileSettings(data.user);
       }
     } else {
       if (elements.btnOpenLoginModal) elements.btnOpenLoginModal.style.display = "inline-flex";
@@ -2609,8 +2878,16 @@ async function handleLogout() {
 async function loadPublicShowcase(username) {
   if (!elements.pagePublicProfile) return;
 
+  state.showcase.username = username;
+  state.showcase.console = "ALL";
+  state.showcase.query = "";
+  if (elements.showcaseSearchInput) elements.showcaseSearchInput.value = "";
+  if (elements.showcaseConsolePills) {
+    const pills = elements.showcaseConsolePills.querySelectorAll(".btn-toggle");
+    pills.forEach(p => p.classList.toggle("active", p.dataset.console === "ALL"));
+  }
+
   elements.showcaseTitle.textContent = `${username}'s Collection`;
-  elements.showcaseSubtitle.textContent = "Collector Showcase • PBPX Archive";
   elements.showcasePrivateNotice.style.display = "none";
   elements.showcaseBody.style.display = "none";
   elements.showcaseContainer.innerHTML = "";
@@ -2631,45 +2908,139 @@ async function loadPublicShowcase(username) {
     }
 
     elements.showcaseBody.style.display = "block";
-    const st = data.stats || {};
-    const ownedTotal = st.owned_demos != null ? st.owned_demos : (data.total_owned || 0);
-    elements.showcaseOwnedCount.textContent = ownedTotal;
-    elements.showcaseCompletionRate.textContent = st.completion_rate != null ? `${Number(st.completion_rate).toFixed(1)}%` : "0.0%";
-    elements.showcasePs1Count.textContent = st.owned_ps1 != null ? st.owned_ps1 : 0;
-    elements.showcasePs2Count.textContent = st.owned_ps2 != null ? st.owned_ps2 : 0;
-
-    const discs = data.discs || [];
-    elements.showcaseResultsCount.textContent = `${discs.length} discs`;
-    elements.showcaseGalleryTitle.textContent = `${username}'s Discs (${discs.length})`;
-
     const isOwner = state.auth && state.auth.user && (state.auth.user.username.toLowerCase() === username.toLowerCase());
 
-    if (discs.length === 0) {
-      elements.showcaseContainer.innerHTML = `
-        <div class="empty-box" style="grid-column: 1 / -1; padding: 40px 20px; text-align: center;">
-          <p class="text-muted" style="margin-bottom: 12px;">
-            ${isOwner ? "You haven't added any discs to your collection yet." : "This collector has not cataloged any discs yet."}
-          </p>
-          ${isOwner ? '<button class="ps-btn ps-btn-dark" id="btnShowcaseEmptyBrowse">Browse Archive to Add Discs</button>' : ''}
-        </div>
-      `;
-      const btnBrowse = document.getElementById("btnShowcaseEmptyBrowse");
-      if (btnBrowse) {
-        btnBrowse.addEventListener("click", () => navigateTo("archive"));
-      }
-      return;
+    // Populate Hero Card
+    if (elements.showcaseAvatarIcon) {
+      elements.showcaseAvatarIcon.innerHTML = getAvatarSvg(data.avatar || "memory_card");
     }
 
-    const fragment = document.createDocumentFragment();
-    discs.forEach(disc => {
-      fragment.appendChild(createShowcaseCard(disc));
-    });
-    elements.showcaseContainer.appendChild(fragment);
+    if (elements.showcaseRoleBadge) {
+      const isAdmin = Boolean(data.is_admin);
+      elements.showcaseRoleBadge.textContent = isAdmin ? "Master Archivist ⚙️" : "Collector";
+      elements.showcaseRoleBadge.className = `profile-role-badge ${isAdmin ? "role-admin" : ""}`;
+    }
+
+    if (elements.showcaseJoined) {
+      elements.showcaseJoined.textContent = formatJoinedDate(data.created_at);
+    }
+
+    if (elements.showcaseBio) {
+      elements.showcaseBio.textContent = data.bio ? data.bio : (isOwner ? "You haven't set a bio yet. Click 'Customize' to add your collector tagline!" : "No bio provided.");
+      elements.showcaseBio.style.fontStyle = data.bio ? "normal" : "italic";
+    }
+
+    if (elements.showcaseFavConsolePill) {
+      const fav = data.favorite_console || "ALL";
+      const favLabel = fav === "PS1" ? "Focus: PlayStation 1" : fav === "PS2" ? "Focus: PlayStation 2" : "Focus: All Systems";
+      elements.showcaseFavConsolePill.textContent = favLabel;
+    }
+
+    const st = data.stats || {};
+    const ownedTotal = st.owned_demos != null ? st.owned_demos : (data.total_owned || 0);
+
+    if (elements.showcaseDiscsCountPill) {
+      elements.showcaseDiscsCountPill.textContent = `${ownedTotal} ${ownedTotal === 1 ? "Disc" : "Discs"} Cataloged`;
+    }
+
+    if (elements.btnShowcaseEditProfile) {
+      elements.btnShowcaseEditProfile.style.display = isOwner ? "inline-flex" : "none";
+    }
+
+    // Populate Stats Grid
+    elements.showcaseOwnedCount.textContent = ownedTotal;
+    const rate = st.completion_rate != null ? Number(st.completion_rate) : 0;
+    elements.showcaseCompletionRate.textContent = `${rate.toFixed(1)}%`;
+    if (elements.showcaseCompletionFill) {
+      elements.showcaseCompletionFill.style.width = `${Math.min(100, Math.max(0, rate))}%`;
+    }
+
+    elements.showcasePs1Count.textContent = st.owned_ps1 != null ? st.owned_ps1 : 0;
+    if (elements.showcasePs1Sub) {
+      elements.showcasePs1Sub.textContent = `of ${st.total_ps1 || 590} archived`;
+    }
+
+    elements.showcasePs2Count.textContent = st.owned_ps2 != null ? st.owned_ps2 : 0;
+    if (elements.showcasePs2Sub) {
+      elements.showcasePs2Sub.textContent = `of ${st.total_ps2 || 282} archived`;
+    }
+
+    // Populate Preservation Quality Card
+    const conds = st.conditions || {};
+    if (elements.showcaseSleeveCount) elements.showcaseSleeveCount.textContent = conds.with_sleeve || 0;
+    if (elements.showcaseCaseCount) elements.showcaseCaseCount.textContent = conds.in_case || 0;
+    if (elements.showcaseWorkingCount) elements.showcaseWorkingCount.textContent = conds.working || 0;
+    if (elements.showcaseMintCount) elements.showcaseMintCount.textContent = conds.mint || 0;
+
+    // Store discs in state & render
+    state.showcase.discs = data.discs || [];
+    filterAndRenderShowcaseDiscs();
+
   } catch (err) {
     console.error("Failed to load showcase:", err);
     elements.showcasePrivateNotice.style.display = "block";
     elements.showcasePrivateMsg.textContent = `Could not load showcase: ${err.message}`;
   }
+}
+
+function filterAndRenderShowcaseDiscs() {
+  if (!elements.showcaseContainer) return;
+  elements.showcaseContainer.innerHTML = "";
+
+  const allDiscs = state.showcase.discs || [];
+  const q = (state.showcase.query || "").toLowerCase().trim();
+  const consoleFilter = state.showcase.console || "ALL";
+
+  const filtered = allDiscs.filter(d => {
+    if (consoleFilter !== "ALL" && (d.console || "").toUpperCase() !== consoleFilter) {
+      return false;
+    }
+    if (q) {
+      const matchTitle = (d.title || "").toLowerCase().includes(q);
+      const matchSced = (d.sced_codes || []).some(s => s.toLowerCase().includes(q)) || (d.catalog_line || "").toLowerCase().includes(q);
+      const matchSection = (d.section_name || "").toLowerCase().includes(q);
+      if (!matchTitle && !matchSced && !matchSection) return false;
+    }
+    return true;
+  });
+
+  const isOwner = state.auth && state.auth.user && (state.auth.user.username.toLowerCase() === state.showcase.username.toLowerCase());
+
+  if (allDiscs.length === 0) {
+    elements.showcaseResultsCount.textContent = "0 discs";
+    elements.showcaseGalleryTitle.textContent = `${state.showcase.username}'s Discs (0)`;
+    elements.showcaseContainer.innerHTML = `
+      <div class="empty-box" style="grid-column: 1 / -1; padding: 40px 20px; text-align: center;">
+        <p class="text-muted" style="margin-bottom: 12px;">
+          ${isOwner ? "You haven't added any discs to your collection yet." : "This collector has not cataloged any discs yet."}
+        </p>
+        ${isOwner ? '<button class="ps-btn ps-btn-dark" id="btnShowcaseEmptyBrowse">Browse Archive to Add Discs</button>' : ''}
+      </div>
+    `;
+    const btnBrowse = document.getElementById("btnShowcaseEmptyBrowse");
+    if (btnBrowse) {
+      btnBrowse.addEventListener("click", () => navigateTo("archive"));
+    }
+    return;
+  }
+
+  elements.showcaseResultsCount.textContent = `${filtered.length} of ${allDiscs.length} discs`;
+  elements.showcaseGalleryTitle.textContent = `${state.showcase.username}'s Discs (${filtered.length})`;
+
+  if (filtered.length === 0) {
+    elements.showcaseContainer.innerHTML = `
+      <div class="empty-box" style="grid-column: 1 / -1; padding: 30px 20px; text-align: center;">
+        <p class="text-muted">No discs matched your filter criteria.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  filtered.forEach(disc => {
+    fragment.appendChild(createShowcaseCard(disc));
+  });
+  elements.showcaseContainer.appendChild(fragment);
 }
 
 function createShowcaseCard(demo) {

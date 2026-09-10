@@ -1,5 +1,5 @@
 """
-Game Intel & Box Art Provider for PlayStation Demo Collector.
+Game Intel & Box Art Provider for PBPX.
 Enriches games with official box art, retro PlayStation packaging aesthetics,
 and quick intel links (YouTube gameplay, Wikipedia).
 """

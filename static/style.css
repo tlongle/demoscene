@@ -196,21 +196,161 @@ body {
   gap: 8px;
 }
 
-/* Showcase Profile Header & Stats */
-.showcase-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
+/* ==========================================================================
+   Showcase Profile & Collector Dossier Hero Card
+   ========================================================================== */
+.profile-hero-card {
+  position: relative;
+  background: var(--ps1-white);
+  border: 1px solid var(--ps1-border);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
-.showcase-header-actions {
+.profile-hero-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 52px;
+  background: linear-gradient(90deg, #1e222d 0%, #2a3142 50%, #1e222d 100%);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.profile-hero-symbols {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  letter-spacing: 12px;
+  color: rgba(255, 255, 255, 0.15);
+  user-select: none;
+}
+
+.profile-hero-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 24px 20px 20px 20px;
+}
+
+.profile-avatar-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-top: 10px;
+}
+
+.profile-avatar-display {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: #181a20;
+  border: 3px solid var(--ps1-white);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.profile-avatar-display svg {
+  width: 58px;
+  height: 58px;
+}
+
+.profile-role-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--ps1-grey-panel);
+  color: var(--text-muted);
+  border: 1px solid var(--ps1-border);
+}
+
+.profile-role-badge.role-admin {
+  background: #0050c8;
+  color: #ffffff;
+  border-color: #003fa0;
+  box-shadow: 0 1px 4px rgba(0, 80, 200, 0.3);
+}
+
+.profile-hero-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-hero-topline {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.profile-username {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.3px;
+  margin: 0;
+}
+
+.profile-joined-text {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.profile-bio {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: #374151;
+  margin: 2px 0 6px 0;
+  word-break: break-word;
+}
+
+.profile-meta-tags {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
+.profile-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  background: var(--ps1-grey-panel);
+  border: 1px solid var(--ps1-border);
+  border-radius: 4px;
+  color: var(--text-main);
+}
+
+.profile-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  margin-top: 14px;
+}
+
+/* Showcase Stats Grid */
 .showcase-stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -247,6 +387,153 @@ body {
 
 .stat-tile-val.text-owned {
   color: var(--status-owned);
+}
+
+.stat-tile-val.text-accent {
+  color: var(--accent-blue);
+}
+
+.stat-tile-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.mini-progress-bar {
+  width: 100%;
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.mini-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0050c8, #00f0ff);
+  border-radius: 2px;
+  transition: width 0.4s ease-out;
+}
+
+/* Preservation & Packaging Quality Card */
+.profile-quality-card {
+  background: var(--ps1-white);
+  border: 1px solid var(--ps1-border);
+  border-radius: 4px;
+  padding: 14px 16px;
+}
+
+.quality-card-header h4 {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.quality-tiles-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.quality-chip {
+  background: var(--ps1-grey-panel);
+  border: 1px solid var(--ps1-border);
+  border-radius: 4px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.quality-chip-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.4px;
+}
+
+.quality-chip-val {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.text-green {
+  color: var(--status-owned) !important;
+}
+
+/* Showcase Filter Toolbar */
+.showcase-gallery-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.showcase-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Avatar Picker Grid (Settings) */
+.avatar-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.avatar-tile {
+  background: var(--ps1-grey-panel);
+  border: 2px solid var(--ps1-border);
+  border-radius: 6px;
+  padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.avatar-tile:hover {
+  border-color: #0050c8;
+  background: #f0f4fc;
+  transform: translateY(-2px);
+}
+
+.avatar-tile.selected {
+  border-color: #0050c8;
+  background: #e8f0fe;
+  box-shadow: 0 0 0 2px rgba(0, 80, 200, 0.25);
+}
+
+.avatar-tile-svg {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-tile-svg svg {
+  width: 100%;
+  height: 100%;
+}
+
+.avatar-tile-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-top: 6px;
+  line-height: 1.2;
 }
 
 /* --------------------------------------------------------------------------
@@ -2058,25 +2345,47 @@ body.modal-open {
   }
 
   /* Showcase / Profile Page Mobile */
-  .showcase-header {
+  .profile-hero-content {
     flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-    padding: 10px 12px;
+    text-align: center;
+    align-items: center;
+    padding: 16px 14px 14px 14px;
+    gap: 14px;
   }
 
-  .showcase-header-actions {
-    display: flex;
+  .profile-hero-bg {
+    height: 44px;
+  }
+
+  .profile-hero-symbols {
+    display: none;
+  }
+
+  .profile-avatar-wrap {
+    margin-top: 4px;
+  }
+
+  .profile-hero-topline {
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .profile-meta-tags {
+    justify-content: center;
+  }
+
+  .profile-hero-actions {
     width: 100%;
-    gap: 8px;
+    align-self: stretch;
+    justify-content: center;
+    margin-top: 4px;
+    flex-wrap: wrap;
   }
 
-  .showcase-header-actions .ps-btn {
-    flex: 1;
+  .profile-hero-actions .ps-btn {
+    flex: 1 1 calc(50% - 8px);
     text-align: center;
     justify-content: center;
-    padding: 8px 10px;
-    font-size: 12px;
   }
 
   .showcase-stats-grid {
@@ -2095,6 +2404,44 @@ body.modal-open {
 
   .stat-tile-val {
     font-size: 18px;
+  }
+
+  .quality-tiles-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .quality-chip {
+    padding: 8px 10px;
+  }
+
+  .quality-chip-val {
+    font-size: 16px;
+  }
+
+  .showcase-gallery-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .showcase-toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .showcase-toolbar .btn-group {
+    flex: 1;
+  }
+
+  .showcase-toolbar input {
+    max-width: 100% !important;
+    width: 100%;
+  }
+
+  .avatar-picker-grid {
+    grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+    gap: 8px;
   }
 
   /* My Collection Header */

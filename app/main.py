@@ -309,7 +309,7 @@ async def register_account(request: Request, payload: RegisterPayload, response:
     if not settings.is_public and user_count > 0 and not settings.ALLOW_REGISTRATION:
         raise HTTPException(
             status_code=403,
-            detail="Public registration is disabled on this self-hosted instance."
+            detail="Public registration is disabled on this instance."
         )
 
     # First user is admin; subsequent users are standard collectors
@@ -349,6 +349,24 @@ async def logout_account(
     return {"success": True}
 
 
+class ProfileUpdatePayload(BaseModel):
+    bio: Optional[str] = None
+    avatar: Optional[str] = None
+    favorite_console: Optional[str] = None
+
+
+@app.post("/api/auth/profile")
+def update_profile(payload: ProfileUpdatePayload, user: Dict[str, Any] = Depends(auth.get_current_user)):
+    """Update user profile (bio, retro avatar, and favorite console)."""
+    updated = db.update_user_profile(
+        user_id=user["id"],
+        bio=payload.bio,
+        avatar=payload.avatar,
+        favorite_console=payload.favorite_console
+    )
+    return {"success": True, "user": updated, "profile": updated}
+
+
 @app.post("/api/auth/privacy")
 def update_privacy(payload: PrivacyPayload, user: Dict[str, Any] = Depends(auth.get_current_user)):
     """Update privacy preference for user collection profile."""
@@ -379,7 +397,12 @@ def get_user_public_collection(
     owned_demos = db.search_demos(collection_status="owned", user_id=target_user["id"], limit=300)
     return {
         "username": target_user["username"],
+        "is_admin": bool(target_user.get("is_admin")),
         "is_private": False,
+        "bio": target_user.get("bio") or "",
+        "avatar": target_user.get("avatar") or "memory_card",
+        "favorite_console": target_user.get("favorite_console") or "ALL",
+        "created_at": target_user.get("created_at"),
         "stats": stats,
         "total_owned": owned_demos["total"],
         "discs": owned_demos["results"]

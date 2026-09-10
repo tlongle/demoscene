@@ -390,12 +390,7 @@ def run_scraper(db_path: str = None, verbose: bool = True) -> Dict[str, Any]:
 
 def peek_and_sync_updates(db_path: str = None, verbose: bool = True) -> Dict[str, Any]:
     """
-    Lightweight targeted incremental update:
-    1. Fetches only the Crimson Ceremony homepage updates section (1 fast GET request).
-    2. Compares the newest date header against `last_synced_date` (baseline 2026.02.11).
-    3. If up to date, finishes in ~200ms with zero changes to database.
-    4. If newer releases are found, scrapes only those specific discs, downloads scans,
-       merges them into SQLite & catalog_seed.json, and advances `last_synced_date`.
+    Lightweight targeted incremental update, checks the website for updates made by users after the last_synced_date
     """
     try:
         res = SESSION.get(BASE_URL, timeout=10)

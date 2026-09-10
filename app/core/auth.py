@@ -1,5 +1,5 @@
 """
-Authentication and session management for DEMOSCENE.
+Authentication and session management for PBPX.
 Provides secure username/password handling with PBKDF2-HMAC-SHA256 and cryptographic session tokens.
 """
 import hashlib
@@ -88,7 +88,7 @@ def authenticate_user(username: str, password: str, db_path: str = None) -> Opti
     username = username.strip()
     conn = get_db_connection(db_path)
     cur = conn.cursor()
-    cur.execute("SELECT id, username, password_hash, salt, is_admin, is_private FROM users WHERE username = ?", (username,))
+    cur.execute("SELECT id, username, password_hash, salt, is_admin, is_private, bio, avatar, favorite_console FROM users WHERE username = ?", (username,))
     row = cur.fetchone()
     conn.close()
 
@@ -100,7 +100,10 @@ def authenticate_user(username: str, password: str, db_path: str = None) -> Opti
             "id": row["id"],
             "username": row["username"],
             "is_admin": bool(row["is_admin"]),
-            "is_private": bool(row["is_private"])
+            "is_private": bool(row["is_private"]),
+            "bio": row["bio"] or "",
+            "avatar": row["avatar"] or "memory_card",
+            "favorite_console": row["favorite_console"] or "ALL"
         }
     return None
 
@@ -130,7 +133,7 @@ def get_user_by_session(token: str, db_path: str = None) -> Optional[Dict[str, A
     conn = get_db_connection(db_path)
     cur = conn.cursor()
     cur.execute("""
-    SELECT u.id, u.username, u.is_admin, u.is_private, s.expires_at
+    SELECT u.id, u.username, u.is_admin, u.is_private, u.bio, u.avatar, u.favorite_console, s.expires_at
     FROM user_sessions s
     JOIN users u ON s.user_id = u.id
     WHERE s.token = ?
@@ -156,7 +159,10 @@ def get_user_by_session(token: str, db_path: str = None) -> Optional[Dict[str, A
         "id": row["id"],
         "username": row["username"],
         "is_admin": bool(row["is_admin"]),
-        "is_private": bool(row["is_private"])
+        "is_private": bool(row["is_private"]),
+        "bio": row["bio"] or "",
+        "avatar": row["avatar"] or "memory_card",
+        "favorite_console": row["favorite_console"] or "ALL"
     }
 
 

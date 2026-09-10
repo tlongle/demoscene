@@ -73,11 +73,17 @@ def init_db(db_path: str = None) -> None:
     )
     """)
 
-    # Migration for users table: add is_private column if missing
+    # Migration for users table: add is_private, bio, avatar, favorite_console columns if missing
     cur.execute("PRAGMA table_info(users)")
     user_cols = [c["name"] for c in cur.fetchall()]
     if "is_private" not in user_cols:
         cur.execute("ALTER TABLE users ADD COLUMN is_private INTEGER NOT NULL DEFAULT 0")
+    if "bio" not in user_cols:
+        cur.execute("ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''")
+    if "avatar" not in user_cols:
+        cur.execute("ALTER TABLE users ADD COLUMN avatar TEXT DEFAULT 'memory_card'")
+    if "favorite_console" not in user_cols:
+        cur.execute("ALTER TABLE users ADD COLUMN favorite_console TEXT DEFAULT 'ALL'")
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS user_sessions (
@@ -1068,7 +1074,11 @@ def get_user_by_username(username: str, db_path: str = None) -> Optional[Dict[st
     """Retrieve user record by username (case-insensitive)."""
     conn = get_db_connection(db_path)
     cur = conn.cursor()
-    cur.execute("SELECT id, username, is_admin, is_private, created_at FROM users WHERE username = ?", (username.strip(),))
+    cur.execute("""
+        SELECT id, username, is_admin, is_private, bio, avatar, favorite_console, created_at 
+        FROM users 
+        WHERE username = ?
+    """, (username.strip(),))
     row = cur.fetchone()
     conn.close()
     return dict(row) if row else None
@@ -1081,4 +1091,41 @@ def update_user_privacy(user_id: int, is_private: bool, db_path: str = None) -> 
     cur.execute("UPDATE users SET is_private = ? WHERE id = ?", (1 if is_private else 0, user_id))
     conn.commit()
     conn.close()
+
+
+def update_user_profile(
+    user_id: int,
+    bio: Optional[str] = None,
+    avatar: Optional[str] = None,
+    favorite_console: Optional[str] = None,
+    db_path: str = None
+) -> Dict[str, Any]:
+    """Update user profile customization (bio, avatar, favorite console)."""
+    conn = get_db_connection(db_path)
+    cur = conn.cursor()
+    updates = []
+    params = []
+    if bio is not None:
+        updates.append("bio = ?")
+        params.append(bio.strip()[:280])
+    if avatar is not None:
+        updates.append("avatar = ?")
+        params.append(avatar.strip()[:32])
+    if favorite_console is not None:
+        updates.append("favorite_console = ?")
+        params.append(favorite_console.strip()[:10])
+
+    if updates:
+        params.append(user_id)
+        cur.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", params)
+        conn.commit()
+
+    cur.execute("""
+        SELECT id, username, is_admin, is_private, bio, avatar, favorite_console, created_at 
+        FROM users 
+        WHERE id = ?
+    """, (user_id,))
+    row = cur.fetchone()
+    conn.close()
+    return dict(row) if row else {}
 

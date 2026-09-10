@@ -1,5 +1,5 @@
 """
-Scan & Image Upload Service for DEMOSCENE.
+Scan & Image Upload Service for PBPX.
 Handles saving user-uploaded disc photos, front covers, and inlay scans.
 """
 import json

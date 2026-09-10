@@ -372,4 +372,51 @@ def test_public_mode_image_pulling_disabled_and_no_api_key_required():
         settings.MODE = orig_mode
 
 
+def test_collector_profile_customization_and_metadata():
+    """Verify collector profile customization endpoint, auth protection, and public showcase metadata."""
+    # 1. Updating profile without auth fails with 401
+    r_unauth = client.post("/api/auth/profile", json={"bio": "Test bio", "avatar": "disc"})
+    assert r_unauth.status_code == 401
 
+    # 2. Login as collector_alice
+    r_login = client.post("/api/auth/login", json={"username": "collector_alice", "password": "alicepassword123"})
+    assert r_login.status_code == 200
+    token = r_login.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 3. Update profile with custom bio, avatar, and favorite console
+    r_update = client.post("/api/auth/profile", json={
+        "bio": "Preserving rare PAL demo discs and Net Yaroze oddities.",
+        "avatar": "net_yaroze",
+        "favorite_console": "PS1"
+    }, headers=headers)
+    assert r_update.status_code == 200
+    res_data = r_update.json()
+    assert res_data["success"] is True
+    assert res_data["user"]["bio"] == "Preserving rare PAL demo discs and Net Yaroze oddities."
+    assert res_data["user"]["avatar"] == "net_yaroze"
+    assert res_data["user"]["favorite_console"] == "PS1"
+
+    # 4. Verify /api/auth/me returns updated profile fields
+    r_me = client.get("/api/auth/me", headers=headers)
+    assert r_me.status_code == 200
+    me_data = r_me.json()
+    assert me_data["user"]["bio"] == "Preserving rare PAL demo discs and Net Yaroze oddities."
+    assert me_data["user"]["avatar"] == "net_yaroze"
+    assert me_data["user"]["favorite_console"] == "PS1"
+
+    # 5. Set collection back to public
+    r_priv = client.post("/api/auth/privacy", json={"is_private": False}, headers=headers)
+    assert r_priv.status_code == 200
+
+    # 6. Guest visits public showcase and sees customized metadata
+    client.cookies.clear()
+    r_showcase = client.get("/api/users/collector_alice/collection")
+    assert r_showcase.status_code == 200
+    showcase = r_showcase.json()
+    assert showcase["username"] == "collector_alice"
+    assert showcase["bio"] == "Preserving rare PAL demo discs and Net Yaroze oddities."
+    assert showcase["avatar"] == "net_yaroze"
+    assert showcase["favorite_console"] == "PS1"
+    assert showcase["is_admin"] is False
+    assert showcase["created_at"] is not None

@@ -5,12 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
   <title>PBPX - PlayStation Demo &amp; Promo Archive</title>
   <meta name="description" content="PBPX - PlayStation Demo &amp; Promo Disc Archive and Multi-User Collection Manager." />
-  
-  <!-- Favicon -->
   <link rel="icon" type="image/x-icon" href="/logo.ico" />
   <link rel="shortcut icon" href="/logo.ico" />
 
-  <!-- PWA Settings -->
+  <!-- PWA -->
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#dcdcdc" />
   <meta name="mobile-web-app-capable" content="yes" />
@@ -26,8 +24,8 @@
 <body>
 
   <div id="app" class="app-wrapper">
-    
-    <!-- Clean, Streamlined Header & Navigation -->
+
+    <!-- Navigation -->
     <header class="ps-header">
       <div class="header-main">
         <div class="brand" style="cursor: pointer;" id="btnBrandHome">
@@ -38,7 +36,7 @@
           </div>
         </div>
 
-        <!-- Primary Top Navigation Tabs -->
+        <!-- Tabs -->
         <div class="header-nav-wrap">
           <nav class="nav-tabs" id="mainNavTabs">
             <button class="nav-tab active" data-page="archive" id="navTabArchive">
@@ -55,13 +53,13 @@
             </button>
           </nav>
 
-          <!-- Auth Status / Log In Controls -->
+          <!-- Log In Controls -->
           <div class="auth-header-controls" id="authHeaderControls">
-            <button class="ps-btn ps-btn-sm" id="btnOpenLoginModal">🔑 Log In</button>
+            <button class="ps-btn ps-btn-sm" id="btnOpenLoginModal">Login</button>
             <button class="ps-btn ps-btn-sm ps-btn-dark" id="btnOpenRegisterModal" style="display: none;">Register</button>
             <div id="userBadgeWrap" style="display: none;">
-              <button class="ps-btn ps-btn-sm" id="btnMyShowcase" title="View my public showcase profile">👤 <span id="lblUserBadge">User</span></button>
-              <button class="ps-btn ps-btn-sm" id="btnHeaderLogout" title="Log Out">Log Out</button>
+              <button class="ps-btn ps-btn-sm" id="btnMyShowcase" title="View my public showcase profile"><span id="lblUserBadge">User</span></button>
+              <button class="ps-btn ps-btn-sm" id="btnHeaderLogout" title="Log Out">Logout</button>
             </div>
           </div>
         </div>
@@ -69,18 +67,18 @@
     </header>
 
     <!-- =========================================================================
-         PAGE 1: ARCHIVE / DEFAULT EXPLORER
+         ARCHIVE / DEFAULT EXPLORER
          ========================================================================= -->
     <main id="pageArchive" class="page-view active">
-      
+
       <!-- Default Controls: Search & Filters -->
       <section class="controls-panel">
         <div class="search-row">
           <span class="search-label">SEARCH</span>
-          <input 
-            type="text" 
-            id="archiveSearchInput" 
-            placeholder="Search archive by demo title, SCED code, or game (e.g. 'OPS2M Demo 46', 'SCED-52161', 'Tekken')..." 
+          <input
+            type="text"
+            id="archiveSearchInput"
+            placeholder="Search archive by demo title, SCED code, or game (e.g. 'OPS2M Demo 46', 'SCED-52161', 'Tekken')..."
             autocomplete="off"
             spellcheck="false"
           />
@@ -154,7 +152,7 @@
          COLLECTION PAGE
          ========================================================================= -->
     <main id="pageCollection" class="page-view" style="display: none;">
-      
+
       <!-- Top Title & Mobile Stats Button -->
       <div class="collection-page-header">
         <div>
@@ -177,17 +175,17 @@
 
       <!-- 2-Column Collection Layout: Main Items Column + Side Stats Card -->
       <div class="collection-layout">
-        
+
         <!-- MAIN COLUMN (Left): Filters, Toggle, and Discs List/Cards -->
         <div class="collection-main-column">
-          
+
           <!-- Collection Controls & Filters -->
           <section class="collection-toolbar-panel">
             <div class="collection-search-wrap">
-              <input 
-                type="text" 
-                id="colSearchInput" 
-                placeholder="Search within my collection (title, code, game, notes)..." 
+              <input
+                type="text"
+                id="colSearchInput"
+                placeholder="Search within my collection (title, code, game, notes)..."
                 autocomplete="off"
                 spellcheck="false"
               />
@@ -238,7 +236,7 @@
             </div>
           </section>
 
-          <!-- PriceCharting List / Cards Container -->
+          <!-- List / Cards Container -->
           <div class="pc-table-wrap" id="collectionContainerWrapper">
             <div id="collectionContainer" class="pc-list">
               <!-- Injected dynamically by app.js (List or Cards) -->
@@ -250,20 +248,21 @@
             <h3>No collection discs found</h3>
             <p>You have not added any discs to your collection yet, or no owned discs match your current filters.</p>
             <button class="ps-btn ps-btn-dark mt-2" id="btnColGoToArchive">Browse Archive to Add Discs</button>
+            <button class="ps-btn ps-btn-dark mt-2" id="">Or import a JSON file!</button>
           </div>
 
         </div>
 
-        <!-- SIDEBAR CONTAINER (Right): Visual Progress Bars & Games Widget -->
+        <!-- SIDEBAR (Right): Progress Bars & Games Widget -->
         <aside class="collection-sidebar" id="collectionSidebar">
-          
-          <!-- Card 1: Stats Breakdown Card -->
+
+          <!-- Stats Breakdown Card -->
           <div class="collection-side-card" id="collectionStatsCard">
             <div class="side-card-header">
               <h3>Collection Breakdown</h3>
             </div>
             <div class="side-card-body">
-              
+
               <!-- Overall Archive Completion Bar -->
               <div class="stat-progress-block">
                 <div class="stat-bar-header">
@@ -386,12 +385,12 @@
             </div>
             <div class="side-card-body">
               <p class="settings-desc mb-2">All unique playable games across your owned demo discs:</p>
-              
+
               <div class="search-row mb-2">
-                <input 
-                  type="text" 
-                  id="colGameSearchInput" 
-                  placeholder="Filter games by title or genre..." 
+                <input
+                  type="text"
+                  id="colGameSearchInput"
+                  placeholder="Filter games by title or genre..."
                   autocomplete="off"
                   spellcheck="false"
                 />
@@ -433,51 +432,117 @@
          PUBLIC SHOWCASE PAGE: /#u/{username}
          ========================================================================= -->
     <main id="pagePublicProfile" class="page-view" style="display: none;">
-      
-      <div class="collection-page-header showcase-header">
-        <div class="showcase-header-left">
-          <h2 class="collection-page-title" id="showcaseTitle">Collector Showcase</h2>
-          <p class="collection-page-sub" id="showcaseSubtitle">Verified PlayStation Demo &amp; Promo Archive</p>
-        </div>
-        <div class="showcase-header-actions">
-          <button class="ps-btn ps-btn-sm" id="btnShowcaseShare" title="Copy public profile URL">🔗 Share Profile</button>
-          <button class="ps-btn ps-btn-sm" id="btnShowcaseBack">← Back to Archive</button>
+
+      <!-- Collector Hero Card -->
+      <div class="profile-hero-card m class="profile-hero-bg">
+        <div class="profile-hero-content">
+          <div class="profile-avatar-wrap">
+            <div class="profile-avatar-display" id="showcaseAvatarIcon">
+              <!-- Rendered via JS -->
+            </div>
+            <span class="profile-role-badge" id="showcaseRoleBadge">Collector</span>
+          </div>
+
+          <div class="profile-hero-info">
+            <div class="profile-hero-topline">
+              <h2 class="profile-username" id="showcaseTitle">Collector Showcase</h2>
+              <span class="profile-joined-text" id="showcaseJoined">Archive Member</span>
+            </div>
+            <p class="profile-bio" id="showcaseBio">No bio added yet.</p>
+            <div class="profile-meta-tags">
+              <span class="profile-meta-pill" id="showcaseFavConsolePill">Favorite: All Systems</span>
+              <span class="profile-meta-pill" id="showcaseDiscsCountPill">0 Discs Indexed</span>
+            </div>
+          </div>
+
+          <div class="profile-hero-actions">
+            <button class="ps-btn ps-btn-sm" id="btnShowcaseShare" title="Copy public profile URL">Share</button>
+            <button class="ps-btn ps-btn-sm" id="btnShowcaseEditProfile" style="display: none;">Customize</button>
+            <button class="ps-btn ps-btn-sm" id="btnShowcaseBack">← Back to Archive</button>
+          </div>
         </div>
       </div>
 
       <!-- Private Notice if User is Private -->
       <div class="empty-box" id="showcasePrivateNotice" style="display: none;">
-        <h3>🔒 Private Collection</h3>
+        <h2>Private Collection</h2>
         <p id="showcasePrivateMsg">This collector has marked their collection profile as private.</p>
         <button class="ps-btn ps-btn-dark mt-2" id="btnShowcaseBrowseArchive">Explore Master Archive</button>
       </div>
 
       <!-- Showcase Body -->
       <div id="showcaseBody" style="display: none;">
-        <!-- Showcase Stats Bar -->
+        <!-- Stats Bar: 4-Tile Grid -->
         <div class="showcase-stats-grid mb-3">
           <div class="showcase-stat-tile">
-            <span class="stat-tile-label">DISCS OWNED</span>
+            <span class="stat-tile-label">TOTAL DISCS</span>
             <strong class="stat-tile-val text-owned" id="showcaseOwnedCount">0</strong>
+            <span class="stat-tile-sub" id="showcaseOwnedSub">Physical discs owned</span>
           </div>
           <div class="showcase-stat-tile">
             <span class="stat-tile-label">ARCHIVE COMPLETION</span>
-            <strong class="stat-tile-val" id="showcaseCompletionRate">0.0%</strong>
+            <strong class="stat-tile-val text-accent" id="showcaseCompletionRate">0.0%</strong>
+            <div class="mini-progress-bar">
+              <div class="mini-progress-fill" id="showcaseCompletionFill" style="width: 0%;"></div>
+            </div>
           </div>
           <div class="showcase-stat-tile">
-            <span class="stat-tile-label">PS1 DISCS</span>
+            <span class="stat-tile-label">PLAYSTATION 1</span>
             <strong class="stat-tile-val" id="showcasePs1Count">0</strong>
+            <span class="stat-tile-sub" id="showcasePs1Sub">of 590 archived</span>
           </div>
           <div class="showcase-stat-tile">
-            <span class="stat-tile-label">PS2 DISCS</span>
+            <span class="stat-tile-label">PLAYSTATION 2</span>
             <strong class="stat-tile-val" id="showcasePs2Count">0</strong>
+            <span class="stat-tile-sub" id="showcasePs2Sub">of 282 archived</span>
           </div>
         </div>
 
-        <div class="gallery-header">
+        <!-- Preservation & Packaging Quality Card -->
+        <div class="profile-quality-card mb-3">
+          <div class="quality-card-header">
+            <h4>Preservation &amp; Packaging Quality</h4>
+          </div>
+          <div class="quality-tiles-row">
+            <div class="quality-chip">
+              <span class="quality-chip-label">ORIGINAL SLEEVES</span>
+              <strong class="quality-chip-val" id="showcaseSleeveCount">0</strong>
+            </div>
+            <div class="quality-chip">
+              <span class="quality-chip-label">IN CASE</span>
+              <strong class="quality-chip-val" id="showcaseCaseCount">0</strong>
+            </div>
+            <div class="quality-chip">
+              <span class="quality-chip-label">TESTED &amp; WORKING</span>
+              <strong class="quality-chip-val text-green" id="showcaseWorkingCount">0</strong>
+            </div>
+            <div class="quality-chip">
+              <span class="quality-chip-label">MINT CONDITION</span>
+              <strong class="quality-chip-val text-green" id="showcaseMintCount">0</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filter & Search Toolbar for Showcase -->
+        <div class="gallery-header showcase-gallery-header">
           <div class="gallery-title-wrap">
             <h3 class="gallery-title" id="showcaseGalleryTitle">Discs in Collection</h3>
             <span id="showcaseResultsCount" class="results-count">Loading discs...</span>
+          </div>
+
+          <div class="gallery-toolbar showcase-toolbar">
+            <div class="btn-group" id="showcaseConsolePills">
+              <button class="btn-toggle active" data-console="ALL">ALL</button>
+              <button class="btn-toggle" data-console="PS1">PS1</button>
+              <button class="btn-toggle" data-console="PS2">PS2</button>
+            </div>
+            <input
+              type="text"
+              id="showcaseSearchInput"
+              class="ps-input ps-input-sm"
+              placeholder="Filter this collection..."
+              style="max-width: 200px;"
+            />
           </div>
         </div>
 
@@ -490,10 +555,10 @@
 
 
     <!-- =========================================================================
-         PAGE 3: SETTINGS & UTILITIES HUB (Unified Cards Layout)
+         SETTINGS & UTILITIES HUB (Unified Cards Layout)
          ========================================================================= -->
     <main id="pageSettings" class="page-view" style="display: none;">
-      
+
       <div class="settings-page-header">
         <h2>System &amp; Data Settings</h2>
         <p>Manage external box art APIs, offline scans, backups, and catalog synchronization.</p>
@@ -501,7 +566,7 @@
 
       <div class="settings-cards-grid">
 
-        <!-- CARD 0: Collector Profile & Privacy -->
+        <!-- Collector Profile & Showcase Customization -->
         <div class="settings-card" id="cardProfileSettings" style="display: none;">
           <div class="settings-card-header">
             <h3>Collector Profile &amp; Showcase</h3>
@@ -509,18 +574,55 @@
           </div>
           <div class="settings-card-body">
             <p class="settings-desc">
-              Your collection has a public showcase link that you can share with friends and fellow collectors.
+              Customize your public preservation profile, avatar, and showcase page viewed by other collectors.
             </p>
 
             <div class="form-group mt-3">
               <label for="txtShowcaseUrl">Your Public Showcase Link</label>
               <div style="display: flex; gap: 8px;">
                 <input type="text" id="txtShowcaseUrl" class="ps-input font-mono" readonly style="flex: 1;" />
-                <button class="ps-btn ps-btn-dark" id="btnCopyShowcaseUrl">Copy Link</button>
+                <button class="ps-btn ps-btn-dark" id="btnCopyShowcaseUrl" title="Copy public profile URL">Copy Link</button>
+                <button class="ps-btn ps-btn-accent" id="btnViewMyShowcase" title="Visit your public profile">View Showcase</button>
               </div>
             </div>
 
+            <!-- Avatar Selection -->
             <div class="form-group mt-3">
+              <label>Collector Avatar</label>
+              <p class="form-hint" style="margin-top: 2px; margin-bottom: 8px;">Select an avatar for your profile showcase.</p>
+              <div class="avatar-picker-grid" id="avatarPickerGrid">
+                <!-- Rendered dynamically by JS -->
+              </div>
+            </div>
+
+            <!-- Bio / Collector Tagline -->
+            <div class="form-group mt-3">
+              <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                <label for="txtProfileBio">Collector Bio / Tagline</label>
+                <span id="txtProfileBioCount" class="text-muted" style="font-size: 11px;">0 / 280</span>
+              </div>
+              <textarea id="txtProfileBio" class="ps-input" rows="2" maxlength="280" placeholder="e.g. Preserving European demo discs since 1997. Passionate about Net Yaroze homebrew."></textarea>
+            </div>
+
+            <!-- System Focus -->
+            <div class="form-group mt-3">
+              <label for="selectProfileConsole">Primary System Focus</label>
+              <select id="selectProfileConsole" class="ps-select">
+                <option value="ALL">All Systems (PlayStation 1 &amp; PlayStation 2)</option>
+                <option value="PS1">PlayStation 1 (PS1)</option>
+                <option value="PS2">PlayStation 2 (PS2)</option>
+              </select>
+            </div>
+
+            <div class="form-actions mt-3" style="display: flex; align-items: center; gap: 12px;">
+              <button class="ps-btn ps-btn-dark" id="btnSaveProfile">Save Profile Changes</button>
+              <span id="profileSaveFeedback" class="form-feedback" style="display: none;"></span>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 20px 0 16px 0;" />
+
+            <!-- Privacy Preference -->
+            <div class="form-group">
               <label class="chk-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                 <input type="checkbox" id="chkMakeCollectionPrivate" />
                 <span><strong>Make My Collection Private</strong> (Only you can see your collection when logged in)</span>
@@ -529,8 +631,8 @@
             <div id="profilePrivacyFeedback" class="form-feedback" style="display: none; margin-top: 6px;"></div>
           </div>
         </div>
-        
-        <!-- CARD 1: Official IGDB Box Art Integration -->
+
+        <!-- Official IGDB Box Art Integration -->
         <div class="settings-card" id="cardIgdbSettings">
           <div class="settings-card-header">
             <h3>Official IGDB (Twitch API) Box Art</h3>
@@ -569,7 +671,7 @@
           </div>
         </div>
 
-        <!-- CARD 2: Offline Scans & Storage -->
+        <!-- Offline Scans & Storage -->
         <div class="settings-card" id="cardOfflineAssets">
           <div class="settings-card-header">
             <h3>Offline Scans &amp; Media Cache</h3>
@@ -608,7 +710,7 @@
           </div>
         </div>
 
-        <!-- CARD 3: Backup & Restore -->
+        <!-- Backup & Restore -->
         <div class="settings-card" id="cardBackupRestore">
           <div class="settings-card-header">
             <h3>Collection Backup &amp; Restore</h3>
@@ -638,7 +740,7 @@
           </div>
         </div>
 
-        <!-- CARD 4: Catalog Synchronization -->
+        <!-- Catalog Synchronization -->
         <div class="settings-card" id="cardCatalogSync">
           <div class="settings-card-header">
             <h3>Catalog Synchronization</h3>
@@ -663,12 +765,12 @@
     </main>
 
     <!-- =========================================================================
-         PAGE 4: ADMIN HUB (MASTER DATABASE & REDUMP INTEGRATION)
+         ADMIN HUB (MASTER DATABASE & REDUMP INTEGRATION)
          ========================================================================= -->
     <main id="pageAdmin" class="page-view">
       <div class="settings-grid">
 
-        <!-- CARD 1: Redump.org Live Disc Ingestion -->
+        <!-- Redump.org Live Disc Ingestion -->
         <div class="settings-card" style="grid-column: 1 / -1;">
           <div class="settings-card-header" style="display: flex; justify-content: space-between; align-items: center;">
             <div>
@@ -681,12 +783,12 @@
           </div>
           <div class="settings-card-body">
             <div style="display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;">
-              <input 
-                type="text" 
-                id="redumpSearchInput" 
-                class="ps-input" 
-                style="flex: 1; min-width: 260px;" 
-                placeholder="Enter disc title or serial (e.g. 'Bonus Demo 08', 'OPS2 Demo 54', 'SCED-54101')..." 
+              <input
+                type="text"
+                id="redumpSearchInput"
+                class="ps-input"
+                style="flex: 1; min-width: 260px;"
+                placeholder="Enter disc title or serial (e.g. 'Bonus Demo 08', 'OPS2 Demo 54', 'SCED-54101')..."
               />
               <select id="redumpConsoleSelect" class="ps-select" style="width: 120px;">
                 <option value="">All Systems</option>
@@ -709,7 +811,7 @@
           </div>
         </div>
 
-        <!-- CARD 2: Manual Disc Creator (Zero-Photo Capable) -->
+        <!-- Manual Disc Creator (Zero-Photo Capable) -->
         <div class="settings-card">
           <div class="settings-card-header">
             <h3>Add Demo Disc (Manual Entry)</h3>
@@ -764,7 +866,7 @@
           </div>
         </div>
 
-        <!-- CARD 3: Disc Scan & Photo Uploader -->
+        <!-- Disc Scan & Photo Uploader -->
         <div class="settings-card">
           <div class="settings-card-header">
             <h3>Upload Photos &amp; Scans</h3>
@@ -840,7 +942,7 @@
     </div>
   </div>
 
-  <!-- Single Disc Quick Edit Modal (For PriceCharting List Rows) -->
+  <!-- Single Disc Quick Edit Modal -->
   <div class="ps-modal-backdrop" id="singleEditModal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="singleEditModalTitle">
     <div class="ps-modal ps-modal-md">
       <div class="ps-modal-header">
@@ -890,7 +992,7 @@
       </div>
       <div class="ps-modal-body">
         <p class="bulk-modal-desc">Apply bulk changes to all selected discs at once:</p>
-        
+
         <div class="form-group">
           <label>Physical Disc Condition</label>
           <select id="bulkConditionSelect" class="ps-select">
@@ -975,7 +1077,7 @@
 
         <div class="modal-actions mt-3" style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border-color); padding-top: 14px;">
           <button class="ps-btn" id="btnWizardSkip">Skip for Now</button>
-          <button class="ps-btn ps-btn-dark" id="btnWizardDownload">📦 Download Artwork Pack (~590 MB)</button>
+          <button class="ps-btn ps-btn-dark" id="btnWizardDownload">Download Artwork Pack (~590 MB)</button>
         </div>
       </div>
     </div>

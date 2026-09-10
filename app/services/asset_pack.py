@@ -1,7 +1,7 @@
 """
 Asset Pack Download & Extraction Pipeline.
 Handles 1-click downloading and extraction of pre-packaged high-res artwork scans (demoscene_assets.tar.gz)
-from GitHub Releases CDN or custom mirrors.
+from GitHub Releases CDN.
 """
 import os
 import tarfile
